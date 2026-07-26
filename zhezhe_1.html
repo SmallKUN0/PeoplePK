@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>哲哲工作室 - 躲避陨石</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a1a;
+            color: #fff;
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #gameCanvas {
+            display: none;
+            background: linear-gradient(to bottom, #0a0a2e 0%, #1a0a3e 50%, #2a0a4e 100%);
+            border-radius: 8px;
+            box-shadow: 0 0 40px rgba(100, 50, 200, 0.3);
+        }
+
+        /* 启动页面 */
+        #startScreen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a0a3e 50%, #0a1a3e 100%);
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+
+        .studio-logo {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 20px rgba(100, 255, 100, 0.5));
+        }
+
+        .studio-name {
+            font-size: 36px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            margin-bottom: 60px;
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(79, 172, 254, 0.3);
+        }
+
+        .start-btn {
+            padding: 16px 60px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            letter-spacing: 4px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 30px rgba(102, 126, 234, 0.6);
+        }
+
+        .start-btn:active {
+            transform: scale(0.98);
+        }
+
+        .start-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .start-btn:hover::before {
+            left: 100%;
+        }
+
+        .game-title {
+            font-size: 20px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 30px;
+            letter-spacing: 2px;
+        }
+
+        .stars {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: #fff;
+            border-radius: 50%;
+            animation: twinkle 2s infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* 游戏结束页面 */
+        #gameOverScreen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 20;
+        }
+
+        .game-over-title {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+        }
+
+        .final-score {
+            font-size: 28px;
+            color: #ffd93d;
+            margin-bottom: 10px;
+        }
+
+        .best-score {
+            font-size: 18px;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 40px;
+        }
+
+        .restart-btn {
+            padding: 14px 50px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            letter-spacing: 3px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .restart-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 30px rgba(245, 87, 108, 0.6);
+        }
+
+        /* 操作提示 */
+        .controls-hint {
+            position: absolute;
+            bottom: 30px;
+            font-size: 14px;
+            color: rgba(255,255,255,0.4);
+            letter-spacing: 1px;
+        }
+
+        /* 分数显示 */
+        #scoreDisplay {
+            display: none;
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 28px;
+            font-weight: bold;
+            color: #ffd93d;
+            text-shadow: 0 0 10px rgba(255, 217, 61, 0.5);
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 启动页面 -->
+    <div id="startScreen">
+        <div class="stars" id="starsContainer"></div>
+        <div class="studio-logo">🌱</div>
+        <div class="studio-name">哲哲工作室</div>
+        <button class="start-btn" onclick="startGame()">开始游戏</button>
+        <div class="game-title">躲避陨石</div>
+        <div class="controls-hint">← → 方向键 或 A D 键控制 | 手机触摸滑动</div>
+    </div>
+
+    <!-- 分数显示 -->
+    <div id="scoreDisplay">分数: 0</div>
+
+    <!-- 游戏画布 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 游戏结束页面 -->
+    <div id="gameOverScreen">
+        <div class="game-over-title">游戏结束</div>
+        <div class="final-score" id="finalScore">分数: 0</div>
+        <div class="best-score" id="bestScore">最高分: 0</div>
+        <button class="restart-btn" onclick="restartGame()">再来一次</button>
+    </div>
+
+    <script>
+        // ============ 星星背景 ============
+        const starsContainer = document.getElementById('starsContainer');
+        for (let i = 0; i < 80; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 2 + 's';
+            star.style.width = (Math.random() * 2 + 1) + 'px';
+            star.style.height = star.style.width;
+            starsContainer.appendChild(star);
+        }
+
+        // ============ 游戏变量 ============
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const finalScoreEl = document.getElementById('finalScore');
+        const bestScoreEl = document.getElementById('bestScore');
+
+        let gameRunning = false;
+        let score = 0;
+        let bestScore = localStorage.getItem('meteorDodgeBest') || 0;
+        let gameTime = 0;
+        let animationId;
+        let lastTime = 0;
+
+        // 画布尺寸
+        let W, H;
+        function resizeCanvas() {
+            W = Math.min(window.innerWidth, 600);
+            H = Math.min(window.innerHeight, 900);
+            canvas.width = W;
+            canvas.height = H;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // ============ 玩家飞船 ============
+        const player = {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 50,
+            speed: 0,
+            maxSpeed: 8,
+            friction: 0.85,
+            accel: 1.2
+        };
+
+        // ============ 陨石 ============
+        let meteors = [];
+        let meteorSpawnTimer = 0;
+        let meteorSpawnInterval = 60; // 帧数
+
+        // ============ 星星背景（游戏内） ============
+        let bgStars = [];
+        for (let i = 0; i < 100; i++) {
+            bgStars.push({
+                x: Math.random() * 600,
+                y: Math.random() * 900,
+                size: Math.random() * 2 + 0.5,
+                speed: Math.random() * 1 + 0.3,
+                brightness: Math.random()
+            });
+        }
+
+        // ============ 粒子效果 ============
+        let particles = [];
+
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 6,
+                    vy: (Math.random() - 0.5) * 6,
+                    life: 1,
+                    decay: Math.random() * 0.03 + 0.01,
+                    size: Math.random() * 4 + 2,
+                    color: color
+                });
+            }
+        }
+
+        // ============ 输入控制 ============
+        const keys = {};
+        let touchX = null;
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchX = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            touchX = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+        });
+        canvas.addEventListener('touchend', () => {
+            touchX = null;
+        });
+
+        // ============ 绘制飞船 ============
+        function drawPlayer() {
+            const x = player.x;
+            const y = player.y;
+            const w = player.width;
+            const h = player.height;
+
+            ctx.save();
+            
+            // 飞船主体
+            ctx.fillStyle = '#4facfe';
+            ctx.beginPath();
+            ctx.moveTo(x, y - h/2);
+            ctx.lineTo(x - w/2, y + h/2);
+            ctx.lineTo(x, y + h/3);
+            ctx.lineTo(x + w/2, y + h/2);
+            ctx.closePath();
+            ctx.fill();
+
+            // 飞船高光
+            ctx.fillStyle = '#00f2fe';
+            ctx.beginPath();
+            ctx.moveTo(x, y - h/2 + 5);
+            ctx.lineTo(x - w/4, y);
+            ctx.lineTo(x, y - h/6);
+            ctx.lineTo(x + w/4, y);
+            ctx.closePath();
+            ctx.fill();
+
+            // 引擎火焰
+            const flameSize = 8 + Math.random() * 6;
+            ctx.fillStyle = `rgba(255, ${100 + Math.random() * 100}, 0, 0.8)`;
+            ctx.beginPath();
+            ctx.moveTo(x - w/4, y + h/3);
+            ctx.lineTo(x, y + h/2 + flameSize);
+            ctx.lineTo(x + w/4, y + h/3);
+            ctx.closePath();
+            ctx.fill();
+
+            // 引擎光晕
+            ctx.shadowColor = '#ff6600';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = 'rgba(255, 150, 0, 0.3)';
+            ctx.beginPath();
+            ctx.arc(x, y + h/2 + flameSize/2, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+        }
+
+        // ============ 绘制陨石 ============
+        function drawMeteor(m) {
+            ctx.save();
+            
+            // 陨石主体
+            const gradient = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.radius);
+            gradient.addColorStop(0, '#8B4513');
+            gradient.addColorStop(0.5, '#654321');
+            gradient.addColorStop(1, '#3d2b1f');
+            ctx.fillStyle = gradient;
+            
+            ctx.beginPath();
+            // 不规则形状
+            const sides = 6 + Math.floor(m.seed * 3);
+            for (let i = 0; i < sides; i++) {
+                const angle = (i / sides) * Math.PI * 2 + m.rotation;
+                const r = m.radius * (0.8 + Math.sin(angle * 3 + m.seed * 10) * 0.2);
+                const px = m.x + Math.cos(angle) * r;
+                const py = m.y + Math.sin(angle) * r;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // 陨石纹理
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.arc(m.x - m.radius*0.3, m.y - m.radius*0.2, m.radius*0.25, 0, Math.PI*2);
+            ctx.fill();
+
+            // 陨石发光效果
+            ctx.shadowColor = '#ff4444';
+            ctx.shadowBlur = 10;
+            ctx.strokeStyle = 'rgba(255, 100, 50, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+        }
+
+        // ============ 碰撞检测 ============
+        function checkCollision(p, m) {
+            const dx = p.x - m.x;
+            const dy = (p.y) - m.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return dist < (p.width/2 + m.radius * 0.7);
+        }
+
+        // ============ 生成陨石 ============
+        function spawnMeteor() {
+            const radius = 15 + Math.random() * 25;
+            meteors.push({
+                x: Math.random() * (W - radius * 2) + radius,
+                y: -radius - 10,
+                radius: radius,
+                speed: 2 + Math.random() * 3 + gameTime * 0.01,
+                rotation: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.1,
+                seed: Math.random()
+            });
+        }
+
+        // ============ 游戏循环 ============
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // 清空画布
+            ctx.fillStyle = '#0a0a2e';
+            ctx.fillRect(0, 0, W, H);
+
+            // 绘制背景渐变
+            const bgGradient = ctx.createLinearGradient(0, 0, 0, H);
+            bgGradient.addColorStop(0, '#0a0a2e');
+            bgGradient.addColorStop(0.5, '#1a0a3e');
+            bgGradient.addColorStop(1, '#2a0a4e');
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, W, H);
+
+            // 绘制背景星星
+            bgStars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > H) {
+                    star.y = 0;
+                    star.x = Math.random() * W;
+                }
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness})`;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            gameTime++;
+
+            // 更新玩家位置
+            let moveDir = 0;
+            if (keys['arrowleft'] || keys['a']) moveDir = -1;
+            if (keys['arrowright'] || keys['d']) moveDir = 1;
+
+            if (touchX !== null) {
+                const diff = touchX - player.x;
+                if (Math.abs(diff) > 5) {
+                    moveDir = diff > 0 ? 1 : -1;
+                }
+            }
+
+            player.speed += moveDir * player.accel;
+            player.speed *= player.friction;
+            player.x += player.speed;
+
+            // 边界限制
+            player.x = Math.max(player.width/2, Math.min(W - player.width/2, player.x));
+
+            // 生成陨石
+            meteorSpawnTimer++;
+            const currentInterval = Math.max(20, meteorSpawnInterval - gameTime * 0.05);
+            if (meteorSpawnTimer >= currentInterval) {
+                spawnMeteor();
+                meteorSpawnTimer = 0;
+            }
+
+            // 更新和绘制陨石
+            for (let i = meteors.length - 1; i >= 0; i--) {
+                const m = meteors[i];
+                m.y += m.speed;
+                m.rotation += m.rotSpeed;
+
+                // 绘制陨石
+                drawMeteor(m);
+
+                // 碰撞检测
+                if (checkCollision(player, m)) {
+                    createParticles(player.x, player.y, '#ff4444', 30);
+                    createParticles(player.x, player.y, '#ffaa00', 20);
+                    gameOver();
+                    return;
+                }
+
+                // 移除超出屏幕的陨石并加分
+                if (m.y > H + m.radius) {
+                    meteors.splice(i, 1);
+                    score += Math.floor(m.radius);
+                    scoreDisplay.textContent = `分数: ${score}`;
+                }
+            }
+
+            // 绘制玩家
+            drawPlayer();
+
+            // 更新和绘制粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= p.decay;
+                
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+
+            // 每60帧加1分（存活奖励）
+            if (gameTime % 60 === 0) {
+                score += 1;
+                scoreDisplay.textContent = `分数: ${score}`;
+            }
+
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // ============ 开始游戏 ============
+        function startGame() {
+            startScreen.style.display = 'none';
+            canvas.style.display = 'block';
+            scoreDisplay.style.display = 'block';
+            
+            resizeCanvas();
+            
+            // 重置游戏状态
+            score = 0;
+            gameTime = 0;
+            meteors = [];
+            particles = [];
+            meteorSpawnTimer = 0;
+            scoreDisplay.textContent = '分数: 0';
+            
+            // 重置玩家位置
+            player.x = W / 2;
+            player.y = H - 80;
+            player.speed = 0;
+
+            gameRunning = true;
+            lastTime = performance.now();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // ============ 游戏结束 ============
+        function gameOver() {
+            gameRunning = false;
+            cancelAnimationFrame(animationId);
+
+            // 更新最高分
+            if (score > bestScore) {
+                bestScore = score;
+                localStorage.setItem('meteorDodgeBest', bestScore);
+            }
+
+            finalScoreEl.textContent = `分数: ${score}`;
+            bestScoreEl.textContent = `最高分: ${bestScore}`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        // ============ 重新开始 ============
+        function restartGame() {
+            gameOverScreen.style.display = 'none';
+            canvas.style.display = 'none';
+            scoreDisplay.style.display = 'none';
+            startScreen.style.display = 'flex';
+        }
+    </script>
+</body>
+</html>

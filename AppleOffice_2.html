@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Line Avoidance</title>
+<style>
+:root{--bg:#0a0a0f;--accent:#6366f1;--accent-glow:rgba(99,102,241,0.4);--gold:#fbbf24;--gold-glow:rgba(251,191,36,0.3);--heart:#f43f5e;--heart-glow:rgba(244,63,94,0.3);--text:#e2e8f0;--text-dim:#94a3b8;--glass:rgba(255,255,255,0.03);--glass-border:rgba(255,255,255,0.08);--mod-bg:#0f0f1a;--mod-border:rgba(99,102,241,0.2);--mod-active:rgba(99,102,241,0.15);}
+*{margin:0;padding:0;box-sizing:border-box;touch-action:none;}
+body{background:var(--bg);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;user-select:none;-webkit-user-select:none;}
+#gameCanvas{display:block;}
+@keyframes fadeInUp{0%{opacity:0;transform:translateY(30px) scale(0.95);filter:blur(4px);}100%{opacity:1;transform:translateY(0) scale(1);filter:blur(0);}}
+@keyframes fadeIn{0%{opacity:0;}100%{opacity:1;}}
+@keyframes titleGlow{0%,100%{text-shadow:0 0 20px var(--accent-glow),0 0 60px rgba(99,102,241,0.1);}50%{text-shadow:0 0 40px var(--accent-glow),0 0 80px rgba(99,102,241,0.2);}}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+@keyframes heartLost{0%{transform:scale(1) rotate(0deg);opacity:1;filter:brightness(1);}30%{transform:scale(1.3) rotate(-10deg);opacity:0.8;filter:brightness(2);}100%{transform:scale(0) rotate(20deg);opacity:0;filter:brightness(0.5);}}
+@keyframes heartGain{0%{transform:scale(0) rotate(-20deg);opacity:0;}60%{transform:scale(1.2) rotate(5deg);opacity:1;}100%{transform:scale(1) rotate(0deg);opacity:1;}}
+@keyframes damageFlash{0%{opacity:0;}20%{opacity:0.3;}100%{opacity:0;}}
+@keyframes coinPop{0%{transform:scale(1);}50%{transform:scale(1.4);}100%{transform:scale(1);}}
+@keyframes slideInLeft{0%{opacity:0;transform:translateX(-30px);}100%{opacity:1;transform:translateX(0);}}
+@keyframes slideInRight{0%{opacity:0;transform:translateX(30px);}100%{opacity:1;transform:translateX(0);}}
+@keyframes slideInUp{0%{opacity:0;transform:translateY(40px);}100%{opacity:1;transform:translateY(0);}}
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 10px rgba(99,102,241,0.1);}50%{box-shadow:0 0 25px rgba(99,102,241,0.3);}}
+#startScreen{position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at 50% 30%,#1a1a2e 0%,var(--bg) 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity 0.8s cubic-bezier(0.4,0,0.2,1);}
+#startScreen::before{content:'';position:absolute;top:50%;left:50%;width:600px;height:600px;transform:translate(-50%,-50%);background:radial-gradient(circle,var(--accent-glow) 0%,transparent 70%);opacity:0.3;pointer-events:none;}
+#startScreen h1{color:var(--text);font-size:clamp(2.8rem,7vw,5rem);font-weight:200;letter-spacing:0.2em;margin-bottom:1rem;animation:fadeInUp 1s cubic-bezier(0.22,1,0.36,1) forwards,titleGlow 3s ease-in-out 1s infinite;opacity:0;position:relative;}
+#startScreen .subtitle{color:var(--text-dim);font-size:0.95rem;letter-spacing:0.15em;margin-bottom:3rem;animation:fadeInUp 1s 0.2s cubic-bezier(0.22,1,0.36,1) forwards;opacity:0;}
+#startBtn{background:transparent;color:var(--text);border:1.5px solid rgba(255,255,255,0.2);padding:1rem 3.5rem;font-size:1rem;letter-spacing:0.25em;cursor:pointer;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);font-weight:300;border-radius:100px;animation:fadeInUp 1s 0.4s cubic-bezier(0.22,1,0.36,1) forwards,float 4s ease-in-out 1.5s infinite;opacity:0;position:relative;overflow:hidden;backdrop-filter:blur(10px);}
+#startBtn::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent);transition:left 0.6s;}
+#startBtn:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.5);transform:scale(1.06);box-shadow:0 0 40px rgba(99,102,241,0.15);}
+#startBtn:hover::before{left:100%;}
+#modCenterBtn{background:transparent;color:var(--text-dim);border:1px solid rgba(255,255,255,0.1);padding:0.7rem 2.2rem;font-size:0.85rem;letter-spacing:0.2em;cursor:pointer;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);font-weight:300;border-radius:100px;animation:fadeInUp 1s 0.55s cubic-bezier(0.22,1,0.36,1) forwards;opacity:0;margin-top:1rem;backdrop-filter:blur(10px);}
+#modCenterBtn:hover{background:rgba(99,102,241,0.08);border-color:rgba(99,102,241,0.4);color:var(--text);transform:scale(1.05);box-shadow:0 0 20px rgba(99,102,241,0.1);}
+#ui{position:fixed;top:0;left:0;width:100%;padding:1.2rem 1.8rem;display:none;justify-content:space-between;align-items:flex-start;z-index:50;pointer-events:none;}
+#uiLeft{display:flex;flex-direction:column;gap:0.5rem;opacity:0;animation:slideInLeft 0.6s 0.2s cubic-bezier(0.22,1,0.36,1) forwards;}
+#uiLeft span{color:var(--text-dim);font-size:0.85rem;letter-spacing:0.08em;font-weight:400;display:flex;align-items:center;gap:0.5rem;}
+#timeUI{color:var(--text)!important;font-size:1rem!important;font-weight:500;}
+#coinUI{color:var(--gold)!important;}
+#coinUI svg{width:16px;height:16px;filter:drop-shadow(0 0 4px var(--gold-glow));}
+#coinCount{display:inline-block;font-variant-numeric:tabular-nums;transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);}
+#coinCount.pop{animation:coinPop 0.3s ease;color:#fff;text-shadow:0 0 10px var(--gold-glow);}
+#uiRight{display:flex;flex-direction:column;align-items:flex-end;gap:0.6rem;opacity:0;animation:slideInRight 0.6s 0.3s cubic-bezier(0.22,1,0.36,1) forwards;}
+#hearts{display:flex;gap:0.35rem;align-items:center;padding:0.4rem 0.8rem;background:var(--glass);border:1px solid var(--glass-border);border-radius:100px;backdrop-filter:blur(10px);}
+.heart{display:inline-block;width:18px;height:18px;transition:all 0.3s ease;}
+.heart svg{width:100%;height:100%;display:block;filter:drop-shadow(0 0 3px var(--heart-glow));transition:all 0.3s ease;}
+.heart.lost{animation:heartLost 0.5s ease forwards;}
+.heart.gain{animation:heartGain 0.5s ease forwards;}
+#exitBtn{background:var(--glass);color:var(--text-dim);border:1px solid var(--glass-border);padding:0.5rem 1.2rem;font-size:0.8rem;cursor:pointer;opacity:0;animation:slideInRight 0.5s 0.4s cubic-bezier(0.22,1,0.36,1) forwards;pointer-events:auto;letter-spacing:0.1em;border-radius:100px;backdrop-filter:blur(10px);transition:all 0.3s ease;}
+#exitBtn:hover{color:var(--text);border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.06);}
+#modBtn{background:var(--glass);color:var(--text-dim);border:1px solid var(--glass-border);padding:0.5rem 1.2rem;font-size:0.8rem;cursor:pointer;opacity:0;animation:slideInRight 0.5s 0.5s cubic-bezier(0.22,1,0.36,1) forwards;pointer-events:auto;letter-spacing:0.1em;border-radius:100px;backdrop-filter:blur(10px);transition:all 0.3s ease;margin-top:0.3rem;}
+#modBtn:hover{color:var(--accent);border-color:rgba(99,102,241,0.4);background:rgba(99,102,241,0.08);}
+#gameOverScreen,#winScreen{position:fixed;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(20px);}
+#gameOverScreen{background:rgba(10,10,15,0.95);}#winScreen{background:rgba(10,10,15,0.95);}
+#gameOverScreen h2,#winScreen h2{color:var(--text);font-size:2.5rem;font-weight:200;margin-bottom:0.5rem;opacity:0;letter-spacing:0.1em;}
+#gameOverScreen h2.show,#winScreen h2.show{animation:fadeInUp 0.8s cubic-bezier(0.34,1.56,0.64,1) forwards;}
+#winScreen h2.show{animation:fadeInUp 0.8s cubic-bezier(0.34,1.56,0.64,1) forwards,titleGlow 3s ease-in-out 1s infinite;}
+#gameOverScreen p,#winScreen p{color:var(--text-dim);font-size:1rem;margin-bottom:0.3rem;opacity:0;}
+#gameOverScreen p.show,#winScreen p.show{animation:fadeInUp 0.6s 0.2s cubic-bezier(0.22,1,0.36,1) forwards;}
+.finalScore{color:var(--text)!important;font-size:1.4rem!important;margin:1.5rem 0!important;font-weight:300;opacity:0;letter-spacing:0.05em;}
+.finalScore.show{animation:fadeInUp 0.6s 0.4s cubic-bezier(0.22,1,0.36,1) forwards;}
+.finalScore span{color:var(--gold);font-weight:500;}
+#restartBtn,#winRestartBtn{background:transparent;color:var(--text);border:1.5px solid rgba(255,255,255,0.15);padding:0.9rem 2.8rem;font-size:0.95rem;margin-top:1rem;cursor:pointer;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);opacity:0;border-radius:100px;letter-spacing:0.15em;backdrop-filter:blur(10px);}
+#restartBtn.show,#winRestartBtn.show{animation:fadeInUp 0.6s 0.6s cubic-bezier(0.22,1,0.36,1) forwards;}
+#restartBtn:hover,#winRestartBtn:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.4);transform:scale(1.05);box-shadow:0 0 30px rgba(99,102,241,0.1);}
+#damageOverlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:40;background:rgba(244,63,94,0);transition:background 0.1s;}
+#damageOverlay.flash{animation:damageFlash 0.3s ease;}
+/* 模组中心样式 */
+#modCenterScreen{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--mod-bg);display:none;flex-direction:column;z-index:200;overflow:hidden;}
+#modCenterHeader{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--mod-border);background:rgba(15,15,26,0.95);backdrop-filter:blur(20px);z-index:10;}
+#modCenterHeader h2{color:var(--text);font-size:1.3rem;font-weight:300;letter-spacing:0.15em;display:flex;align-items:center;gap:0.6rem;}
+#modCenterHeader h2::before{content:'⚡';font-size:1.1rem;}
+#modCenterClose{background:transparent;color:var(--text-dim);border:1px solid rgba(255,255,255,0.1);padding:0.5rem 1.2rem;font-size:0.8rem;cursor:pointer;border-radius:100px;transition:all 0.3s ease;letter-spacing:0.1em;}
+#modCenterClose:hover{background:rgba(244,63,94,0.1);border-color:rgba(244,63,94,0.4);color:var(--heart);}
+#modCenterBody{flex:1;display:flex;overflow:hidden;}
+#modListPanel{width:280px;min-width:280px;border-right:1px solid var(--mod-border);display:flex;flex-direction:column;background:rgba(10,10,15,0.5);}
+#modListHeader{padding:1rem 1.2rem;border-bottom:1px solid var(--mod-border);display:flex;justify-content:space-between;align-items:center;}
+#modListHeader span{color:var(--text-dim);font-size:0.8rem;letter-spacing:0.1em;}
+#newModBtn{background:var(--accent);color:#fff;border:none;padding:0.4rem 1rem;font-size:0.75rem;cursor:pointer;border-radius:100px;transition:all 0.3s ease;letter-spacing:0.05em;}
+#newModBtn:hover{transform:scale(1.05);box-shadow:0 0 15px var(--accent-glow);}
+#modList{flex:1;overflow-y:auto;padding:0.5rem;}
+#modList::-webkit-scrollbar{width:4px;}
+#modList::-webkit-scrollbar-thumb{background:rgba(99,102,241,0.3);border-radius:4px;}
+.modItem{padding:0.8rem 1rem;border-radius:8px;cursor:pointer;transition:all 0.25s ease;margin-bottom:0.3rem;border:1px solid transparent;display:flex;align-items:center;justify-content:space-between;}
+.modItem:hover{background:rgba(99,102,241,0.05);border-color:rgba(99,102,241,0.1);}
+.modItem.active{background:var(--mod-active);border-color:var(--mod-border);}
+.modItem .modName{color:var(--text);font-size:0.85rem;font-weight:400;letter-spacing:0.02em;}
+.modItem .modStatus{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.1);transition:all 0.3s ease;}
+.modItem.active .modStatus{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.4);}
+.modItem .modDelete{color:var(--text-dim);font-size:0.7rem;opacity:0;transition:all 0.2s ease;padding:0.2rem 0.4rem;border-radius:4px;}
+.modItem:hover .modDelete{opacity:1;}
+.modItem .modDelete:hover{background:rgba(244,63,94,0.15);color:var(--heart);}
+#modEditorPanel{flex:1;display:flex;flex-direction:column;background:var(--mod-bg);}
+#modEditorToolbar{padding:0.8rem 1.2rem;border-bottom:1px solid var(--mod-border);display:flex;gap:0.6rem;align-items:center;}
+.modToolBtn{background:transparent;color:var(--text-dim);border:1px solid rgba(255,255,255,0.1);padding:0.4rem 1rem;font-size:0.75rem;cursor:pointer;border-radius:100px;transition:all 0.3s ease;letter-spacing:0.05em;}
+.modToolBtn:hover{background:rgba(99,102,241,0.08);border-color:rgba(99,102,241,0.3);color:var(--text);}
+.modToolBtn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+.modToolBtn.primary:hover{background:#818cf8;box-shadow:0 0 15px var(--accent-glow);}
+.modToolBtn.danger{background:transparent;color:var(--heart);border-color:rgba(244,63,94,0.3);}
+.modToolBtn.danger:hover{background:rgba(244,63,94,0.1);}
+#modNameInput{background:rgba(255,255,255,0.03);border:1px solid var(--mod-border);color:var(--text);padding:0.4rem 0.8rem;font-size:0.8rem;border-radius:6px;outline:none;transition:all 0.3s ease;flex:1;max-width:200px;font-family:inherit;letter-spacing:0.02em;}
+#modNameInput:focus{border-color:rgba(99,102,241,0.5);box-shadow:0 0 10px rgba(99,102,241,0.1);}
+#modNameInput::placeholder{color:var(--text-dim);opacity:0.5;}
+#modEditorArea{flex:1;display:flex;flex-direction:column;padding:0;}
+#modCodeEditor{flex:1;background:#0a0a12;color:var(--text);border:none;outline:none;padding:1.2rem;font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:0.8rem;line-height:1.6;resize:none;tab-size:2;overflow-y:auto;white-space:pre;}
+#modCodeEditor::-webkit-scrollbar{width:6px;}
+#modCodeEditor::-webkit-scrollbar-thumb{background:rgba(99,102,241,0.2);border-radius:4px;}
+#modCodeEditor::placeholder{color:var(--text-dim);opacity:0.3;}
+#modConsole{height:120px;min-height:120px;border-top:1px solid var(--mod-border);background:rgba(0,0,0,0.3);padding:0.8rem 1.2rem;overflow-y:auto;font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:0.75rem;line-height:1.5;color:var(--text-dim);}
+#modConsole::-webkit-scrollbar{width:4px;}
+#modConsole::-webkit-scrollbar-thumb{background:rgba(99,102,241,0.2);border-radius:4px;}
+.modLogEntry{margin-bottom:0.3rem;padding:0.15rem 0;border-bottom:1px solid rgba(255,255,255,0.02);}
+.modLogEntry.error{color:#f87171;}
+.modLogEntry.success{color:#4ade80;}
+.modLogEntry.info{color:#60a5fa;}
+.modLogEntry.warn{color:#fbbf24;}
+#modHelpPanel{width:260px;min-width:260px;border-left:1px solid var(--mod-border);background:rgba(10,10,15,0.5);padding:1.2rem;overflow-y:auto;}
+#modHelpPanel h3{color:var(--text);font-size:0.85rem;font-weight:500;margin-bottom:1rem;letter-spacing:0.05em;}
+.helpSection{margin-bottom:1.2rem;}
+.helpSection h4{color:var(--accent);font-size:0.75rem;font-weight:500;margin-bottom:0.4rem;letter-spacing:0.05em;}
+.helpSection p,.helpSection code{color:var(--text-dim);font-size:0.72rem;line-height:1.6;}
+.helpSection code{background:rgba(99,102,241,0.1);padding:0.1rem 0.3rem;border-radius:3px;color:var(--accent);font-family:monospace;}
+.helpSection pre{background:rgba(0,0,0,0.3);padding:0.6rem;border-radius:6px;margin-top:0.4rem;overflow-x:auto;font-size:0.7rem;line-height:1.5;color:var(--text-dim);border:1px solid rgba(255,255,255,0.05);}
+#modEmptyState{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-dim);}
+#modEmptyState svg{width:48px;height:48px;opacity:0.2;margin-bottom:1rem;}
+#modEmptyState p{font-size:0.85rem;letter-spacing:0.05em;}
+/* 模组运行时覆盖层 */
+#modRuntimeOverlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:55;display:none;}
+#modRuntimeOverlay.active{display:block;}
+</style>
+</head>
+<body>
+<div id="startScreen">
+<h1>Line Avoidance</h1>
+<p class="subtitle">躲避线条 · 收集金币 · 存活60秒</p>
+<button id="startBtn">开始游戏</button>
+<button id="modCenterBtn">⚡ 模组中心</button>
+</div>
+<div id="ui">
+<div id="uiLeft">
+<span id="timeUI">时间: 0:00</span>
+<span id="coinUI">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></svg>
+<span id="coinCount">0</span>
+</span>
+</div>
+<div id="uiRight">
+<div id="hearts">
+<span class="heart" data-index="0"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></span>
+<span class="heart" data-index="1"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></span>
+<span class="heart" data-index="2"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></span>
+<span class="heart" data-index="3"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></span>
+<span class="heart" data-index="4"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></span>
+</div>
+<button id="modBtn">⚡ 模组</button>
+<button id="exitBtn">退出</button>
+</div>
+</div>
+<div id="gameOverScreen">
+<h2>游戏结束</h2>
+<p>你的生命值耗尽了</p>
+<p class="finalScore">金币: <span id="finalCoins">0</span></p>
+<button id="restartBtn">重新开始</button>
+</div>
+<div id="winScreen">
+<h2>通关</h2>
+<p>成功存活60秒</p>
+<p class="finalScore">金币: <span id="winCoins">0</span></p>
+<button id="winRestartBtn">再玩一次</button>
+</div>
+<div id="damageOverlay"></div>
+<canvas id="gameCanvas"></canvas>
+
+<!-- 模组中心界面 -->
+<div id="modCenterScreen">
+<div id="modCenterHeader">
+<h2>模组中心</h2>
+<button id="modCenterClose">关闭</button>
+</div>
+<div id="modCenterBody">
+<div id="modListPanel">
+<div id="modListHeader">
+<span>模组列表</span>
+<button id="newModBtn">+ 新建</button>
+</div>
+<div id="modList"></div>
+</div>
+<div id="modEditorPanel">
+<div id="modEditorToolbar">
+<input id="modNameInput" placeholder="模组名称" maxlength="30">
+<button class="modToolBtn" id="modRunBtn">▶ 运行</button>
+<button class="modToolBtn primary" id="modSaveBtn">保存</button>
+<button class="modToolBtn danger" id="modStopBtn">⏹ 停止</button>
+</div>
+<div id="modEditorArea">
+<div id="modEmptyState">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+<p>选择一个模组或创建新模组</p>
+</div>
+<textarea id="modCodeEditor" spellcheck="false" style="display:none;"></textarea>
+</div>
+<div id="modConsole"></div>
+</div>
+<div id="modHelpPanel">
+<h3>📖 API 文档</h3>
+<div class="helpSection">
+<h4>全局对象</h4>
+<p><code>game</code> - 游戏主对象<br><code>player</code> - 玩家对象<br><code>ctx</code> - Canvas 2D 上下文<br><code>W</code> <code>H</code> - 画布宽高</p>
+</div>
+<div class="helpSection">
+<h4>游戏控制</h4>
+<p><code>game.addCoin(x, y)</code> - 在指定位置生成金币<br><code>game.addLine(type, speed)</code> - 生成线条<br><code>game.spawnParticles(x, y, color, count)</code> - 生成粒子<br><code>game.setTime(seconds)</code> - 设置游戏时间<br><code>game.setLives(n)</code> - 设置生命值<br><code>game.addLives(n)</code> - 增加生命值<br><code>game.setCoinScore(n)</code> - 设置金币数</p>
+</div>
+<div class="helpSection">
+<h4>玩家控制</h4>
+<p><code>player.x</code> <code>player.y</code> - 位置<br><code>player.r</code> - 半径<br><code>player.setPos(x, y)</code> - 设置位置<br><code>player.setColor(r, g, b)</code> - 设置颜色<br><code>player.setRadius(r)</code> - 设置半径</p>
+</div>
+<div class="helpSection">
+<h4>绘制</h4>
+<p><code>game.drawText(text, x, y, options)</code> - 绘制文字<br><code>game.drawRect(x, y, w, h, color)</code> - 绘制矩形<br><code>game.drawCircle(x, y, r, color)</code> - 绘制圆形</p>
+</div>
+<div class="helpSection">
+<h4>事件钩子</h4>
+<p>在代码中定义以下函数即可自动触发：</p>
+<pre>function onUpdate(dt) {
+  // 每帧调用，dt为时间差
+}
+function onDraw() {
+  // 每帧绘制后调用
+}
+function onCoinCollect() {
+  // 收集金币时调用
+}
+function onDamage() {
+  // 受伤时调用
+}</pre>
+</div>
+<div class="helpSection">
+<h4>示例</h4>
+<pre>// 彩虹玩家
+let hue = 0;
+function onUpdate(dt) {
+  hue = (hue + dt * 100) % 360;
+  let c = hslToRgb(hue, 100, 50);
+  player.setColor(c[0], c[1], c[2]);
+}
+function onDraw() {
+  game.drawText("Rainbow Mode", W/2, 80, {
+    color: "#fff", size: 20, align: "center"
+  });
+}</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="modRuntimeOverlay"></div>
+
+<script>
+const AudioSys={
+ctx:null,
+init(){this.ctx=new(window.AudioContext||window.webkitAudioContext)();},
+resume(){if(this.ctx&&this.ctx.state==='suspended')this.ctx.resume();},
+playCoin(){if(!this.ctx)return;const t=this.ctx.currentTime;const osc=this.ctx.createOscillator();const gain=this.ctx.createGain();osc.connect(gain);gain.connect(this.ctx.destination);osc.type='sine';osc.frequency.setValueAtTime(880,t);osc.frequency.exponentialRampToValueAtTime(1760,t+0.08);gain.gain.setValueAtTime(0.2,t);gain.gain.exponentialRampToValueAtTime(0.001,t+0.12);osc.start(t);osc.stop(t+0.12);},
+playDamage(){if(!this.ctx)return;const t=this.ctx.currentTime;const osc=this.ctx.createOscillator();const gain=this.ctx.createGain();osc.connect(gain);gain.connect(this.ctx.destination);osc.type='sawtooth';osc.frequency.setValueAtTime(180,t);osc.frequency.exponentialRampToValueAtTime(60,t+0.25);gain.gain.setValueAtTime(0.3,t);gain.gain.exponentialRampToValueAtTime(0.001,t+0.25);osc.start(t);osc.stop(t+0.25);},
+playHeal(){if(!this.ctx)return;const t=this.ctx.currentTime;[523.25,659.25,783.99].forEach((freq,i)=>{const osc=this.ctx.createOscillator();const gain=this.ctx.createGain();osc.connect(gain);gain.connect(this.ctx.destination);osc.type='sine';osc.frequency.setValueAtTime(freq,t+i*0.05);gain.gain.setValueAtTime(0,t+i*0.05);gain.gain.linearRampToValueAtTime(0.2,t+i*0.05+0.02);gain.gain.exponentialRampToValueAtTime(0.001,t+i*0.05+0.25);osc.start(t+i*0.05);osc.stop(t+i*0.05+0.25);});},
+playGameOver(){if(!this.ctx)return;const t=this.ctx.currentTime;[440,349.23,293.66,220].forEach((freq,i)=>{const osc=this.ctx.createOscillator();const gain=this.ctx.createGain();osc.connect(gain);gain.connect(this.ctx.destination);osc.type='sine';osc.frequency.setValueAtTime(freq,t+i*0.12);gain.gain.setValueAtTime(0.25,t+i*0.12);gain.gain.exponentialRampToValueAtTime(0.001,t+i*0.12+0.25);osc.start(t+i*0.12);osc.stop(t+i*0.12+0.25);});},
+playWin(){if(!this.ctx)return;const t=this.ctx.currentTime;const notes=[523.25,659.25,783.99,1046.50];notes.forEach((freq,i)=>{const osc=this.ctx.createOscillator();const gain=this.ctx.createGain();osc.connect(gain);gain.connect(this.ctx.destination);osc.type='sine';osc.frequency.setValueAtTime(freq,t+i*0.08);gain.gain.setValueAtTime(0,t+i*0.08);gain.gain.linearRampToValueAtTime(0.25,t+i*0.08+0.03);gain.gain.exponentialRampToValueAtTime(0.001,t+i*0.08+0.4);osc.start(t+i*0.08);osc.stop(t+i*0.08+0.4);});},
+playStart(){if(!this.ctx)return;const t=this.ctx.currentTime;const osc=this.ctx.createOscillator();const gain=this.ctx.createGain();osc.connect(gain);gain.connect(this.ctx.destination);osc.type='sine';osc.frequency.setValueAtTime(440,t);osc.frequency.exponentialRampToValueAtTime(880,t+0.08);gain.gain.setValueAtTime(0.25,t);gain.gain.exponentialRampToValueAtTime(0.001,t+0.15);osc.start(t);osc.stop(t+0.15);}
+};
+
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+const startScreen=document.getElementById('startScreen');
+const gameOverScreen=document.getElementById('gameOverScreen');
+const winScreen=document.getElementById('winScreen');
+const ui=document.getElementById('ui');
+const timeUI=document.getElementById('timeUI');
+const coinCountEl=document.getElementById('coinCount');
+const finalCoins=document.getElementById('finalCoins');
+const winCoins=document.getElementById('winCoins');
+const damageOverlay=document.getElementById('damageOverlay');
+const heartEls=document.querySelectorAll('.heart');
+
+let W,H,player,lines,coins,hearts,particles,bgParticles;
+let coinScore,gameTime,lastTime,isPlaying,isGameOver;
+let spawnTimer,coinTimer,heartTimer,difficulty,mouseX,mouseY,isDragging;
+let lives=5,maxLives=5,damageCooldown=0;
+
+// ========== 模组系统 ==========
+const ModSys={
+mods:[],
+activeMod:null,
+running:false,
+hooks:{update:[],draw:[],coinCollect:[],damage:[],init:[],gameOver:[],win:[]},
+sandbox:null,
+consoleEl:document.getElementById('modConsole'),
+editor:document.getElementById('modCodeEditor'),
+nameInput:document.getElementById('modNameInput'),
+modList:document.getElementById('modList'),
+emptyState:document.getElementById('modEmptyState'),
+loadFromStorage(){
+try{
+const data=localStorage.getItem('la_mods');
+if(data)this.mods=JSON.parse(data);
+}catch(e){this.mods=[];}
+if(this.mods.length===0){
+this.mods=[
+{id:'mod_demo_1',name:'彩虹玩家',code:`// 彩虹玩家模组\nlet hue = 0;\nfunction onUpdate(dt) {\n  hue = (hue + dt * 120) % 360;\n  let c = hslToRgb(hue, 80, 60);\n  player.setColor(c[0], c[1], c[2]);\n}\nfunction onDraw() {\n  game.drawText("🌈 Rainbow Mode", W/2, 80, {\n    color: "rgba(255,255,255,0.6)", size: 16, align: "center"\n  });\n}`,active:false},
+{id:'mod_demo_2',name:'金币磁铁',code:`// 金币磁铁模组\nfunction onUpdate(dt) {\n  for (let i = coins.length - 1; i >= 0; i--) {\n    let c = coins[i];\n    let dx = player.x - c.x;\n    let dy = player.y - c.y;\n    let dist = Math.sqrt(dx*dx + dy*dy);\n    if (dist < 150 && dist > 30) {\n      c.x += dx / dist * 120 * dt;\n      c.y += dy / dist * 120 * dt;\n    }\n  }\n}\nfunction onDraw() {\n  ctx.beginPath();\n  ctx.arc(player.x, player.y, 150, 0, Math.PI*2);\n  ctx.strokeStyle = "rgba(251,191,36,0.05)";\n  ctx.lineWidth = 1;\n  ctx.stroke();\n}`,active:false},
+{id:'mod_demo_3',name:'时间减速',code:`// 时间减速模组 - 受伤后3秒内减速\nlet slowTimer = 0;\nfunction onDamage() {\n  slowTimer = 3;\n}\nfunction onUpdate(dt) {\n  if (slowTimer > 0) {\n    slowTimer -= dt;\n    // 通过修改线条速度实现减速效果\n    for (let l of lines) {\n      l._origSpeed = l._origSpeed || l.speed;\n      l.speed = l._origSpeed * 0.3;\n    }\n    game.drawText("⏱ 时间减速", W/2, 100, {\n      color: "rgba(96,165,250,0.8)", size: 14, align: "center"\n    });\n  } else {\n    for (let l of lines) {\n      if (l._origSpeed) l.speed = l._origSpeed;\n    }\n  }\n}`,active:false}
+];
+this.saveToStorage();
+}
+this.renderModList();
+},
+saveToStorage(){localStorage.setItem('la_mods',JSON.stringify(this.mods));},
+log(msg,type='info'){
+const entry=document.createElement('div');
+entry.className='modLogEntry '+type;
+entry.textContent='['+new Date().toLocaleTimeString()+'] '+msg;
+this.consoleEl.appendChild(entry);
+this.consoleEl.scrollTop=this.consoleEl.scrollHeight;
+},
+clearConsole(){this.consoleEl.innerHTML='';},
+renderModList(){
+this.modList.innerHTML='';
+this.mods.forEach(mod=>{
+const item=document.createElement('div');
+item.className='modItem'+(this.activeMod&&this.activeMod.id===mod.id?' active':'');
+item.innerHTML='<span class="modName">'+mod.name+'</span><span class="modDelete" data-id="'+mod.id+'">删除</span>';
+item.onclick=(e)=>{
+if(e.target.classList.contains('modDelete')){this.deleteMod(mod.id);return;}
+this.loadMod(mod);
+};
+this.modList.appendChild(item);
+});
+},
+loadMod(mod){
+this.activeMod=mod;
+this.nameInput.value=mod.name;
+this.editor.value=mod.code;
+this.editor.style.display='block';
+this.emptyState.style.display='none';
+this.renderModList();
+},
+newMod(){
+const id='mod_'+Date.now();
+const mod={id:id,name:'新模组 '+this.mods.length,code:'// 在这里编写你的模组代码\nfunction onUpdate(dt) {\n  // 每帧更新\n}\n\nfunction onDraw() {\n  // 每帧绘制\n}\n',active:false};
+this.mods.push(mod);
+this.saveToStorage();
+this.loadMod(mod);
+this.log('创建新模组: '+mod.name,'success');
+},
+deleteMod(id){
+this.mods=this.mods.filter(m=>m.id!==id);
+if(this.activeMod&&this.activeMod.id===id){
+this.activeMod=null;
+this.nameInput.value='';
+this.editor.value='';
+this.editor.style.display='none';
+this.emptyState.style.display='flex';
+}
+this.saveToStorage();
+this.renderModList();
+},
+saveMod(){
+if(!this.activeMod)return;
+this.activeMod.name=this.nameInput.value||'未命名模组';
+this.activeMod.code=this.editor.value;
+this.saveToStorage();
+this.renderModList();
+this.log('模组已保存: '+this.activeMod.name,'success');
+},
+stopMod(){
+this.running=false;
+this.hooks={update:[],draw:[],coinCollect:[],damage:[],init:[],gameOver:[],win:[]};
+this.log('模组已停止','warn');
+if(this.activeMod){
+this.activeMod.active=false;
+this.saveToStorage();
+this.renderModList();
+}
+},
+runMod(){
+if(!this.activeMod){this.log('请先选择一个模组','error');return;}
+this.clearConsole();
+this.saveMod();
+this.activeMod.active=true;
+this.saveToStorage();
+this.renderModList();
+this.running=true;
+this.hooks={update:[],draw:[],coinCollect:[],damage:[],init:[],gameOver:[],win:[]};
+try{
+const sandbox=this.buildSandbox();
+const fn=new Function('game','player','ctx','W','H','lines','coins','hearts','particles','bgParticles','console','hslToRgb',this.activeMod.code);
+fn(sandbox,player,ctx,W,H,lines,coins,hearts,particles,bgParticles,{log:(...a)=>this.log(a.join(' '),'info'),error:(...a)=>this.log(a.join(' '),'error'),warn:(...a)=>this.log(a.join(' '),'warn')},hslToRgb);
+this.log('模组运行成功!','success');
+}catch(err){
+this.log('运行错误: '+err.message,'error');
+this.running=false;
+}
+},
+buildSandbox(){
+const self=this;
+return{
+addCoin:(x,y)=>{const c=new Coin();c.x=x||Math.random()*W;c.y=y||Math.random()*H;coins.push(c);},
+addLine:(type,speed)=>{const l=new Line();if(type)l.type=type;if(speed)l.speed=speed;lines.push(l);},
+spawnParticles:(x,y,color,count)=>spawnParticles(x,y,color,count||10,1),
+setTime:s=>{gameTime=s;},
+setLives:n=>{lives=Math.max(0,Math.min(maxLives,n));updateHeartsUI();},
+addLives:n=>{for(let i=0;i<n;i++)gainLife();},
+setCoinScore:n=>{coinScore=n;coinCountEl.textContent=coinScore;},
+drawText:(text,x,y,opts={})=>{
+ctx.save();
+ctx.font=(opts.size||16)+'px system-ui';
+ctx.fillStyle=opts.color||'#fff';
+ctx.textAlign=opts.align||'left';
+ctx.textBaseline=opts.baseline||'middle';
+if(opts.shadow){ctx.shadowBlur=opts.shadowBlur||10;ctx.shadowColor=opts.shadowColor||'rgba(0,0,0,0.5)';}
+ctx.fillText(text,x,y);
+ctx.restore();
+},
+drawRect:(x,y,w,h,color)=>{
+ctx.fillStyle=color||'#fff';
+ctx.fillRect(x,y,w,h);
+},
+drawCircle:(x,y,r,color)=>{
+ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color||'#fff';ctx.fill();
+},
+registerHook:(name,fn)=>{
+if(self.hooks[name])self.hooks[name].push(fn);
+}
+};
+},
+callHook(name,...args){
+if(!this.running)return;
+this.hooks[name].forEach(fn=>{try{fn(...args);}catch(e){this.log('Hook错误('+name+'): '+e.message,'error');}});
+},
+collectHooksFromGlobals(){
+const g=window;
+if(typeof g.onUpdate==='function')this.hooks.update.push(g.onUpdate);
+if(typeof g.onDraw==='function')this.hooks.draw.push(g.onDraw);
+if(typeof g.onCoinCollect==='function')this.hooks.coinCollect.push(g.onCoinCollect);
+if(typeof g.onDamage==='function')this.hooks.damage.push(g.onDamage);
+if(typeof g.onInit==='function')this.hooks.init.push(g.onInit);
+if(typeof g.onGameOver==='function')this.hooks.gameOver.push(g.onGameOver);
+if(typeof g.onWin==='function')this.hooks.win.push(g.onWin);
+}
+};
+
+function hslToRgb(h,s,l){
+h/=360;s/=100;l/=100;let r,g,b;
+if(s===0){r=g=b=l;}else{
+const hue2rgb=(p,q,t)=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
+const q=l<0.5?l*(1+s):l+s-l*s;const p=2*l-q;
+r=hue2rgb(p,q,h+1/3);g=hue2rgb(p,q,h);b=hue2rgb(p,q,h-1/3);
+}
+return [Math.round(r*255),Math.round(g*255),Math.round(b*255)];
+}
+
+function resize(){
+W=window.innerWidth;H=window.innerHeight;
+canvas.width=W;canvas.height=H;
+}
+resize();
+window.addEventListener('resize',resize);
+
+class Player{
+constructor(){
+this.x=W/2;this.y=H/2;this.r=7;this.trail=[];this.maxTrail=25;
+this.targetX=W/2;this.targetY=H/2;this.pulsePhase=0;
+this._color=[129,140,248];this._baseR=7;
+}
+update(tx,ty){
+this.targetX=tx;this.targetY=ty;
+this.x+=(this.targetX-this.x)*0.1;this.y+=(this.targetY-this.y)*0.1;
+this.trail.push({x:this.x,y:this.y,alpha:1,size:this.r});
+if(this.trail.length>this.maxTrail)this.trail.shift();
+for(let i=0;i<this.trail.length;i++){
+this.trail[i].alpha=i/this.trail.length;
+this.trail[i].size=this.r*(i/this.trail.length)*0.6;
+}
+this.pulsePhase+=0.05;
+}
+draw(){
+for(let i=0;i<this.trail.length;i++){
+let t=this.trail[i];
+let alpha=t.alpha*0.25;
+ctx.beginPath();ctx.arc(t.x,t.y,t.size,0,Math.PI*2);
+ctx.fillStyle='rgba('+this._color[0]+','+this._color[1]+','+this._color[2]+','+alpha+')';
+ctx.fill();
+}
+let pulseR=this.r+3+Math.sin(this.pulsePhase)*1.5;
+ctx.beginPath();ctx.arc(this.x,this.y,pulseR,0,Math.PI*2);
+ctx.fillStyle='rgba('+this._color[0]+','+this._color[1]+','+this._color[2]+',0.08)';
+ctx.fill();
+ctx.beginPath();ctx.arc(this.x,this.y,this.r+2,0,Math.PI*2);
+ctx.fillStyle='rgba('+this._color[0]+','+this._color[1]+','+this._color[2]+',0.15)';
+ctx.fill();
+ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+ctx.fillStyle='rgb('+this._color[0]+','+this._color[1]+','+this._color[2]+')';
+ctx.shadowBlur=15;
+ctx.shadowColor='rgba('+this._color[0]+','+this._color[1]+','+this._color[2]+',0.5)';
+ctx.fill();ctx.shadowBlur=0;
+}
+setPos(x,y){this.x=x;this.y=y;this.targetX=x;this.targetY=y;}
+setColor(r,g,b){this._color=[r,g,b];}
+setRadius(r){this.r=r;this._baseR=r;}
+}
+
+class Line{
+constructor(){
+this.type=Math.random()<0.5?'horizontal':'vertical';
+this.speed=(1.5+Math.random()*2+difficulty)*60;
+this.thickness=1.5+Math.random()*2;this.opacity=0;this.fadeIn=true;
+this.color=Math.random()<0.3?[99,102,241]:[255,255,255];
+if(this.type==='horizontal'){
+this.x=Math.random()<0.5?-200:W+200;this.y=Math.random()*H;
+this.vx=this.x<0?this.speed:-this.speed;this.vy=0;
+this.len=120+Math.random()*300;
+}else{
+this.x=Math.random()*W;this.y=Math.random()<0.5?-200:H+200;
+this.vx=0;this.vy=this.y<0?this.speed:-this.speed;
+this.len=120+Math.random()*300;
+}
+this.angle=Math.atan2(this.vy,this.vx);
+}
+update(dt){
+this.x+=this.vx*dt;this.y+=this.vy*dt;
+if(this.fadeIn){this.opacity=Math.min(this.opacity+dt*5,0.9);if(this.opacity>=0.9)this.fadeIn=false;}
+}
+draw(){
+let ex=this.x+Math.cos(this.angle)*this.len;
+let ey=this.y+Math.sin(this.angle)*this.len;
+ctx.beginPath();ctx.moveTo(this.x,this.y);ctx.lineTo(ex,ey);
+ctx.strokeStyle='rgba('+this.color[0]+','+this.color[1]+','+this.color[2]+','+this.opacity*0.15+')';
+ctx.lineWidth=this.thickness*4;ctx.lineCap='round';ctx.stroke();
+ctx.beginPath();ctx.moveTo(this.x,this.y);ctx.lineTo(ex,ey);
+ctx.strokeStyle='rgba('+this.color[0]+','+this.color[1]+','+this.color[2]+','+this.opacity+')';
+ctx.lineWidth=this.thickness;ctx.lineCap='round';
+ctx.shadowBlur=8;
+ctx.shadowColor='rgba('+this.color[0]+','+this.color[1]+','+this.color[2]+','+this.opacity*0.4+')';
+ctx.stroke();ctx.shadowBlur=0;
+}
+offScreen(){
+if(this.type==='horizontal')return(this.vx>0&&this.x>W+300)||(this.vx<0&&this.x<-300);
+return(this.vy>0&&this.y>H+300)||(this.vy<0&&this.y<-300);
+}
+hit(p){
+let ex=this.x+Math.cos(this.angle)*this.len;
+let ey=this.y+Math.sin(this.angle)*this.len;
+return distToSegment(p.x,p.y,this.x,this.y,ex,ey)<p.r+this.thickness/2+4;
+}
+}
+
+class Coin{
+constructor(){
+this.x=60+Math.random()*(W-120);this.y=60+Math.random()*(H-120);
+this.r=12;this.bob=Math.random()*Math.PI*2;
+this.bobSpeed=1.5+Math.random();this.scale=0;this.scaleTarget=1;
+this.spawnTime=0;this.pulse=0;
+}
+update(dt){
+this.bob+=dt*this.bobSpeed;this.pulse+=dt*2;
+if(this.scale<this.scaleTarget){this.scale+=dt*6;if(this.scale>this.scaleTarget)this.scale=this.scaleTarget;}
+}
+draw(){
+let yOff=Math.sin(this.bob)*4;
+let pulseScale=1+Math.sin(this.pulse)*0.06;
+let finalScale=this.scale*pulseScale;
+ctx.save();ctx.translate(this.x,this.y+yOff);ctx.scale(finalScale,finalScale);
+ctx.beginPath();ctx.arc(0,0,this.r+10,0,Math.PI*2);
+ctx.fillStyle='rgba(251,191,36,0.04)';ctx.fill();
+ctx.beginPath();ctx.arc(0,0,this.r+3,0,Math.PI*2);
+ctx.strokeStyle='rgba(251,191,36,0.3)';ctx.lineWidth=1;ctx.stroke();
+ctx.beginPath();ctx.arc(0,0,this.r,0,Math.PI*2);
+ctx.fillStyle='rgba(251,191,36,0.9)';
+ctx.shadowBlur=12;ctx.shadowColor='rgba(251,191,36,0.3)';
+ctx.fill();ctx.shadowBlur=0;
+ctx.beginPath();ctx.moveTo(0,-5);ctx.lineTo(0,5);
+ctx.moveTo(-5,0);ctx.lineTo(5,0);
+ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1.5;ctx.lineCap='round';ctx.stroke();
+ctx.restore();
+}
+hit(p){
+let dx=p.x-this.x,dy=p.y-(this.y+Math.sin(this.bob)*4);
+return Math.sqrt(dx*dx+dy*dy)<p.r+this.r+2;
+}
+}
+
+class HeartItem{
+constructor(){
+this.x=60+Math.random()*(W-120);this.y=60+Math.random()*(H-120);
+this.r=14;this.bob=Math.random()*Math.PI*2;
+this.bobSpeed=1.5+Math.random();this.scale=0;this.scaleTarget=1;
+this.spawnTime=0;this.pulse=0;
+}
+update(dt){
+this.bob+=dt*this.bobSpeed;this.pulse+=dt*2;
+if(this.scale<this.scaleTarget){this.scale+=dt*5;if(this.scale>this.scaleTarget)this.scale=this.scaleTarget;}
+}
+draw(){
+let yOff=Math.sin(this.bob)*5;
+let pulseScale=1+Math.sin(this.pulse)*0.1;
+let finalScale=this.scale*pulseScale;
+ctx.save();ctx.translate(this.x,this.y+yOff);ctx.scale(finalScale,finalScale);
+ctx.fillStyle='#f43f5e';
+ctx.shadowBlur=10;ctx.shadowColor='rgba(244,63,94,0.35)';
+ctx.beginPath();this.drawHeartPath(ctx,0,0,this.r);ctx.fill();ctx.shadowBlur=0;
+ctx.restore();
+}
+drawHeartPath(ctx,x,y,size){
+ctx.moveTo(x,y+size*0.3);
+ctx.bezierCurveTo(x-size*0.5,y-size*0.3,x-size,y+size*0.1,x,y+size);
+ctx.bezierCurveTo(x+size,y+size*0.1,x+size*0.5,y-size*0.3,x,y+size*0.3);
+}
+hit(p){
+let dx=p.x-this.x,dy=p.y-(this.y+Math.sin(this.bob)*5);
+return Math.sqrt(dx*dx+dy*dy)<p.r+this.r+3;
+}
+}
+
+class Particle{
+constructor(x,y,color,speedMult){
+this.x=x;this.y=y;
+let angle=Math.random()*Math.PI*2;
+let speed=(40+Math.random()*120)*(speedMult||1);
+this.vx=Math.cos(angle)*speed;this.vy=Math.sin(angle)*speed;
+this.life=1;this.decay=0.6+Math.random()*1.2;
+this.color=color;this.size=1.5+Math.random()*2.5;
+}
+update(dt){
+this.x+=this.vx*dt;this.y+=this.vy*dt;
+this.vx*=0.97;this.vy*=0.97;
+this.life-=this.decay*dt;this.size*=0.985;
+}
+draw(){
+let alpha=Math.max(0,this.life);
+if(alpha<=0)return;
+ctx.beginPath();ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+ctx.fillStyle='rgba('+this.color+','+alpha+')';
+ctx.shadowBlur=6;
+ctx.shadowColor='rgba('+this.color+','+alpha*0.5+')';
+ctx.fill();ctx.shadowBlur=0;
+}
+}
+
+class BgParticle{
+constructor(){
+this.x=Math.random()*W;this.y=Math.random()*H;
+this.vx=(Math.random()-0.5)*8;this.vy=(Math.random()-0.5)*8;
+this.size=0.5+Math.random()*1.5;this.alpha=0.1+Math.random()*0.2;
+}
+update(dt){
+this.x+=this.vx*dt;this.y+=this.vy*dt;
+if(this.x<0)this.x=W;if(this.x>W)this.x=0;
+if(this.y<0)this.y=H;if(this.y>H)this.y=0;
+}
+draw(){
+ctx.beginPath();ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+ctx.fillStyle='rgba(148,163,184,'+this.alpha+')';ctx.fill();
+}
+}
+
+function distToSegment(px,py,x1,y1,x2,y2){
+let dx=x2-x1,dy=y2-y1,lenSq=dx*dx+dy*dy;
+if(lenSq===0)return Math.sqrt((px-x1)**2+(py-y1)**2);
+let t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/lenSq));
+let projX=x1+t*dx,projY=y1+t*dy;
+return Math.sqrt((px-projX)**2+(py-projY)**2);
+}
+
+function spawnParticles(x,y,color,count,speedMult){
+for(let i=0;i<count;i++)particles.push(new Particle(x,y,color,speedMult));
+}
+
+function formatTime(s){
+let m=Math.floor(s/60);
+let sec=Math.floor(s%60);
+return m+':'+sec.toString().padStart(2,'0');
+}
+
+function updateHeartsUI(){
+heartEls.forEach((el,i)=>{
+const svg=el.querySelector('svg');
+if(i<lives){svg.style.fill='#f43f5e';svg.style.opacity='1';}
+else{svg.style.fill='#f43f5e';svg.style.opacity='0.15';}
+});
+}
+
+function loseLife(){
+if(lives<=0)return true;
+lives--;
+AudioSys.playDamage();
+damageOverlay.classList.add('flash');
+setTimeout(()=>damageOverlay.classList.remove('flash'),300);
+const heartEl=heartEls[lives];
+if(heartEl){heartEl.classList.add('lost');setTimeout(()=>heartEl.classList.remove('lost'),500);}
+updateHeartsUI();
+ModSys.callHook('damage');
+if(lives<=0){
+spawnParticles(player.x,player.y,'99,102,241',40,1.5);
+spawnParticles(player.x,player.y,'255,255,255',20);
+ModSys.callHook('gameOver');
+endGame();
+return true;
+}
+return false;
+}
+
+function gainLife(){
+if(lives>=maxLives)return false;
+lives++;
+AudioSys.playHeal();
+const heartEl=heartEls[lives-1];
+if(heartEl){heartEl.classList.add('gain');setTimeout(()=>heartEl.classList.remove('gain'),500);}
+updateHeartsUI();
+return true;
+}
+
+function initGame(){
+player=new Player();
+lines=[];coins=[];hearts=[];particles=[];bgParticles=[];
+for(let i=0;i<30;i++)bgParticles.push(new BgParticle());
+coinScore=0;lives=5;damageCooldown=0;gameTime=0;
+spawnTimer=0;coinTimer=0;heartTimer=6+Math.random()*4;
+difficulty=0;isGameOver=false;
+mouseX=W/2;mouseY=H/2;
+updateHeartsUI();
+coinCountEl.textContent='0';
+timeUI.textContent='时间: 0:00';
+ModSys.callHook('init');
+}
+
+function startGame(){
+AudioSys.init();AudioSys.resume();AudioSys.playStart();
+initGame();
+startScreen.style.opacity='0';
+setTimeout(()=>{startScreen.style.display='none';},800);
+ui.style.display='flex';
+exitBtn.style.display='block';
+modBtn.style.display='block';
+isPlaying=true;
+lastTime=performance.now();
+requestAnimationFrame(gameLoop);
+}
+
+function endGame(){
+isPlaying=false;isGameOver=true;
+AudioSys.playGameOver();
+setTimeout(()=>{
+ui.style.display='none';exitBtn.style.display='none';modBtn.style.display='none';
+gameOverScreen.style.display='flex';
+setTimeout(()=>{gameOverScreen.querySelector('h2').classList.add('show');},100);
+setTimeout(()=>{
+gameOverScreen.querySelectorAll('p').forEach((p,i)=>{
+setTimeout(()=>{p.classList.add('show');},i*150);
+});
+},200);
+setTimeout(()=>{document.getElementById('restartBtn').classList.add('show');},500);
+},400);
+finalCoins.textContent=coinScore;
+}
+
+function winGame(){
+isPlaying=false;
+AudioSys.playWin();
+setTimeout(()=>{
+ui.style.display='none';exitBtn.style.display='none';modBtn.style.display='none';
+winScreen.style.display='flex';
+setTimeout(()=>{winScreen.querySelector('h2').classList.add('show');},100);
+setTimeout(()=>{
+winScreen.querySelectorAll('p').forEach((p,i)=>{
+setTimeout(()=>{p.classList.add('show');},i*150);
+});
+},300);
+setTimeout(()=>{document.getElementById('winRestartBtn').classList.add('show');},600);
+},400);
+winCoins.textContent=coinScore;
+ModSys.callHook('win');
+}
+
+function exitGame(){
+isPlaying=false;
+setTimeout(()=>{
+ui.style.display='none';exitBtn.style.display='none';modBtn.style.display='none';
+gameOverScreen.style.display='none';winScreen.style.display='none';
+gameOverScreen.querySelector('h2').classList.remove('show');
+gameOverScreen.querySelectorAll('p').forEach(p=>p.classList.remove('show'));
+document.getElementById('restartBtn').classList.remove('show');
+winScreen.querySelector('h2').classList.remove('show');
+winScreen.querySelectorAll('p').forEach(p=>p.classList.remove('show'));
+document.getElementById('winRestartBtn').classList.remove('show');
+heartEls.forEach(el=>{el.classList.remove('lost','gain');});
+startScreen.style.display='flex';
+void startScreen.offsetWidth;
+startScreen.style.opacity='1';
+},500);
+}
+
+function gameLoop(now){
+if(!isPlaying)return;
+let dt=Math.max(0,Math.min((now-lastTime)/1000,0.05));
+lastTime=now;
+gameTime+=dt;
+difficulty=Math.min(gameTime/15,4);
+timeUI.textContent='时间: '+formatTime(gameTime);
+if(damageCooldown>0)damageCooldown-=dt;
+if(gameTime>=60){winGame();return;}
+spawnTimer-=dt;
+if(spawnTimer<=0){
+let count=1+Math.floor(difficulty*0.8);
+for(let i=0;i<count;i++)lines.push(new Line());
+spawnTimer=Math.max(0.25,1.0-difficulty*0.12);
+}
+coinTimer-=dt;
+if(coinTimer<=0){
+let c=new Coin();c.spawnTime=gameTime;coins.push(c);
+coinTimer=2+Math.random()*2;
+}
+heartTimer-=dt;
+if(heartTimer<=0&&lives<maxLives){
+let h=new HeartItem();h.spawnTime=gameTime;hearts.push(h);
+heartTimer=8+Math.random()*6;
+}
+player.update(mouseX,mouseY);
+for(let p of bgParticles)p.update(dt);
+let isHittingLine=false;
+for(let i=lines.length-1;i>=0;i--){
+lines[i].update(dt);
+if(lines[i].offScreen()){lines.splice(i,1);continue;}
+if(lines[i].hit(player)&&damageCooldown<=0&&lives>0){isHittingLine=true;}
+}
+if(isHittingLine&&damageCooldown<=0){
+const died=loseLife();damageCooldown=0.5;
+if(died)return;
+}
+for(let i=coins.length-1;i>=0;i--){
+coins[i].update(dt);
+if(coins[i].hit(player)){
+AudioSys.playCoin();
+spawnParticles(coins[i].x,coins[i].y,'251,191,36',15);
+spawnParticles(coins[i].x,coins[i].y,'255,255,255',8);
+coins.splice(i,1);
+coinScore++;
+coinCountEl.classList.add('pop');
+setTimeout(()=>coinCountEl.classList.remove('pop'),300);
+coinCountEl.textContent=coinScore;
+ModSys.callHook('coinCollect');
+continue;
+}
+if(gameTime-coins[i].spawnTime>8)coins.splice(i,1);
+}
+for(let i=hearts.length-1;i>=0;i--){
+hearts[i].update(dt);
+if(hearts[i].hit(player)){
+if(gainLife()){
+spawnParticles(hearts[i].x,hearts[i].y,'244,63,94',18);
+spawnParticles(hearts[i].x,hearts[i].y,'255,200,200',10);
+}
+hearts.splice(i,1);
+continue;
+}
+if(gameTime-hearts[i].spawnTime>12)hearts.splice(i,1);
+}
+for(let i=particles.length-1;i>=0;i--){
+particles[i].update(dt);
+if(particles[i].life<=0)particles.splice(i,1);
+}
+ModSys.callHook('update',dt);
+draw();
+ModSys.callHook('draw');
+requestAnimationFrame(gameLoop);
+}
+
+function draw(){
+ctx.fillStyle='#0a0a0f';ctx.fillRect(0,0,W,H);
+let grad=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+grad.addColorStop(0,'rgba(99,102,241,0.03)');grad.addColorStop(1,'rgba(0,0,0,0)');
+ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+for(let p of bgParticles)p.draw();
+ctx.strokeStyle='rgba(148,163,184,0.02)';ctx.lineWidth=0.5;
+for(let i=1;i<8;i++){
+let y=H*i/8;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+let x=W*i/8;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+}
+for(let h of hearts)h.draw();
+for(let c of coins)c.draw();
+for(let l of lines)l.draw();
+for(let p of particles)p.draw();
+player.draw();
+}
+
+canvas.addEventListener('mousedown',e=>{isDragging=true;mouseX=e.clientX;mouseY=e.clientY;});
+canvas.addEventListener('mousemove',e=>{if(isDragging){mouseX=e.clientX;mouseY=e.clientY;}});
+canvas.addEventListener('mouseup',()=>isDragging=false);
+canvas.addEventListener('touchstart',e=>{isDragging=true;mouseX=e.touches[0].clientX;mouseY=e.touches[0].clientY;e.preventDefault();},{passive:false});
+canvas.addEventListener('touchmove',e=>{if(isDragging){mouseX=e.touches[0].clientX;mouseY=e.touches[0].clientY;}e.preventDefault();},{passive:false});
+canvas.addEventListener('touchend',()=>isDragging=false);
+
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('restartBtn').addEventListener('click',()=>{
+gameOverScreen.style.display='none';
+gameOverScreen.querySelector('h2').classList.remove('show');
+gameOverScreen.querySelectorAll('p').forEach(p=>p.classList.remove('show'));
+document.getElementById('restartBtn').classList.remove('show');
+startGame();
+});
+document.getElementById('winRestartBtn').addEventListener('click',()=>{
+winScreen.style.display='none';
+winScreen.querySelector('h2').classList.remove('show');
+winScreen.querySelectorAll('p').forEach(p=>p.classList.remove('show'));
+document.getElementById('winRestartBtn').classList.remove('show');
+startGame();
+});
+exitBtn.addEventListener('click',exitGame);
+
+// ========== 模组中心事件绑定 ==========
+const modCenterScreen=document.getElementById('modCenterScreen');
+const modCenterBtn=document.getElementById('modCenterBtn');
+const modCenterClose=document.getElementById('modCenterClose');
+const modBtn=document.getElementById('modBtn');
+const newModBtn=document.getElementById('newModBtn');
+const modRunBtn=document.getElementById('modRunBtn');
+const modSaveBtn=document.getElementById('modSaveBtn');
+const modStopBtn=document.getElementById('modStopBtn');
+
+function openModCenter(){
+modCenterScreen.style.display='flex';
+modCenterScreen.style.opacity='0';
+void modCenterScreen.offsetWidth;
+modCenterScreen.style.opacity='1';
+modCenterScreen.style.transition='opacity 0.3s ease';
+ModSys.loadFromStorage();
+}
+
+function closeModCenter(){
+modCenterScreen.style.opacity='0';
+setTimeout(()=>{modCenterScreen.style.display='none';},300);
+}
+
+modCenterBtn.addEventListener('click',openModCenter);
+modBtn.addEventListener('click',()=>{
+if(isPlaying){
+isPlaying=false;
+setTimeout(openModCenter,300);
+}else{
+openModCenter();
+}
+});
+modCenterClose.addEventListener('click',closeModCenter);
+newModBtn.addEventListener('click',()=>ModSys.newMod());
+modRunBtn.addEventListener('click',()=>ModSys.runMod());
+modSaveBtn.addEventListener('click',()=>ModSys.saveMod());
+modStopBtn.addEventListener('click',()=>ModSys.stopMod());
+
+// Tab键支持
+document.getElementById('modCodeEditor').addEventListener('keydown',function(e){
+if(e.key==='Tab'){
+e.preventDefault();
+const start=this.selectionStart;
+const end=this.selectionEnd;
+this.value=this.value.substring(0,start)+'  '+this.value.substring(end);
+this.selectionStart=this.selectionEnd=start+2;
+}
+});
+
+// 初始化
+ModSys.loadFromStorage();
+</script>
+</body>
+</html>

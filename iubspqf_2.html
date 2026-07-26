@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>云影 · 程序化体积云测试</title>
+<style>
+ :root {
+   --bg: #0a0a0f;
+   --panel: rgba(18, 20, 28, 0.78);
+   --panel-border: rgba(255,255,255,0.08);
+   --fg: #f5f5f7;
+   --muted: #9ca3af;
+   --accent: #ff7a45;
+ }
+ * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+ html, body {
+   width: 100%; height: 100%;
+   overflow: hidden;
+   background: var(--bg);
+   color: var(--fg);
+   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+   -webkit-font-smoothing: antialiased;
+   user-select: none;
+   touch-action: none;
+ }
+ #scene {
+   position: fixed; inset: 0;
+   width: 100%; height: 100%;
+   display: block;
+ }
+ /* 顶部信息栏 */
+ .top-bar {
+   position: fixed;
+   top: 0; left: 0; right: 0;
+   padding: 14px 18px;
+   padding-top: max(14px, env(safe-area-inset-top));
+   z-index: 10;
+   display: flex;
+   align-items: flex-start;
+   justify-content: space-between;
+   pointer-events: none;
+ }
+ .title-block { pointer-events: auto; }
+ .title {
+   font-size: 17px;
+   font-weight: 800;
+   letter-spacing: 1px;
+   color: var(--fg);
+   text-shadow: 0 1px 10px rgba(0,0,0,0.6);
+ }
+ .subtitle {
+   font-size: 10px;
+   color: rgba(255,255,255,0.65);
+   margin-top: 3px;
+   letter-spacing: 1.4px;
+   text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+ }
+ .time-display {
+   pointer-events: auto;
+   background: var(--panel);
+   backdrop-filter: blur(16px);
+   -webkit-backdrop-filter: blur(16px);
+   border: 1px solid var(--panel-border);
+   border-radius: 14px;
+   padding: 8px 14px;
+   text-align: right;
+   min-width: 88px;
+ }
+ .time-display .clock {
+   font-size: 22px;
+   font-weight: 700;
+   font-variant-numeric: tabular-nums;
+   letter-spacing: 1px;
+   line-height: 1.1;
+ }
+ .time-display .label {
+   font-size: 9px;
+   color: var(--muted);
+   letter-spacing: 1.5px;
+   text-transform: uppercase;
+   margin-top: 2px;
+ }
+ .fps {
+   position: fixed;
+   top: 78px;
+   right: 14px;
+   font-size: 10px;
+   color: rgba(255,255,255,0.55);
+   font-variant-numeric: tabular-nums;
+   background: var(--panel);
+   padding: 4px 9px;
+   border-radius: 8px;
+   border: 1px solid var(--panel-border);
+   backdrop-filter: blur(12px);
+   -webkit-backdrop-filter: blur(12px);
+   z-index: 9;
+   letter-spacing: 0.5px;
+ }
+ /* 底部控制面板（可收起） */
+ .control-panel {
+   position: fixed;
+   bottom: 0; left: 0; right: 0;
+   z-index: 10;
+   transform: translateY(0);
+   transition: transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+   will-change: transform;
+ }
+ .control-panel.collapsed {
+   transform: translateY(calc(100% - 44px));
+ }
+ .handle {
+   height: 44px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   cursor: pointer;
+   pointer-events: auto;
+   background: linear-gradient(to top, rgba(8,8,12,0.5), transparent);
+ }
+ .handle::before {
+   content: '';
+   width: 44px;
+   height: 5px;
+   background: rgba(255,255,255,0.28);
+   border-radius: 3px;
+   transition: width 0.2s, background 0.2s;
+ }
+ .handle:active::before {
+   width: 64px;
+   background: rgba(255,255,255,0.5);
+ }
+ .panel-inner {
+   background: var(--panel);
+   backdrop-filter: blur(22px);
+   -webkit-backdrop-filter: blur(22px);
+   border-top: 1px solid var(--panel-border);
+   padding: 12px 16px;
+   padding-bottom: max(14px, env(safe-area-inset-bottom));
+   box-shadow: 0 -10px 40px rgba(0,0,0,0.4);
+   max-height: 60vh;
+   overflow-y: auto;
+   -webkit-overflow-scrolling: touch;
+ }
+ .presets {
+   display: grid;
+   grid-template-columns: repeat(4, 1fr);
+   gap: 7px;
+   margin-bottom: 12px;
+ }
+ .preset-btn {
+   background: rgba(255,255,255,0.04);
+   border: 1px solid rgba(255,255,255,0.08);
+   border-radius: 11px;
+   padding: 9px 4px;
+   color: var(--fg);
+   font-size: 11px;
+   font-weight: 600;
+   letter-spacing: 0.5px;
+   cursor: pointer;
+   transition: all 0.18s ease;
+   text-align: center;
+   font-family: inherit;
+ }
+ .preset-btn:active { transform: scale(0.94); }
+ .preset-btn.active {
+   background: linear-gradient(135deg, #ff7a45, #ff9a6c);
+   border-color: transparent;
+   color: #fff;
+   box-shadow: 0 4px 14px rgba(255,122,69,0.4);
+ }
+ .preset-btn .dot {
+   display: block;
+   width: 8px; height: 8px;
+   margin: 0 auto 4px;
+   border-radius: 50%;
+   background: currentColor;
+   opacity: 0.85;
+ }
+ .sliders {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 10px 14px;
+ }
+ .slider-row.full { grid-column: 1 / -1; }
+ .slider-label {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   margin-bottom: 5px;
+ }
+ .slider-label .name {
+   font-size: 11px;
+   font-weight: 600;
+   color: var(--fg);
+   letter-spacing: 0.5px;
+ }
+ .slider-label .value {
+   font-size: 10px;
+   color: var(--accent);
+   font-weight: 700;
+   font-variant-numeric: tabular-nums;
+   background: rgba(255,122,69,0.12);
+   padding: 2px 7px;
+   border-radius: 5px;
+   min-width: 38px;
+   text-align: center;
+ }
+ input[type="range"] {
+   -webkit-appearance: none;
+   appearance: none;
+   width: 100%;
+   height: 5px;
+   background: rgba(255,255,255,0.1);
+   border-radius: 3px;
+   outline: none;
+   cursor: pointer;
+ }
+ input[type="range"]::-webkit-slider-thumb {
+   -webkit-appearance: none;
+   appearance: none;
+   width: 20px; height: 20px;
+   background: var(--fg);
+   border-radius: 50%;
+   box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 3px rgba(255,255,255,0.05);
+   cursor: grab;
+   transition: transform 0.15s;
+ }
+ input[type="range"]::-webkit-slider-thumb:active {
+   transform: scale(1.15);
+   cursor: grabbing;
+ }
+ input[type="range"]::-moz-range-thumb {
+   width: 20px; height: 20px;
+   background: var(--fg);
+   border-radius: 50%;
+   border: none;
+   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+   cursor: grab;
+ }
+ .hint {
+   position: fixed;
+   left: 50%; top: 50%;
+   transform: translate(-50%, -50%);
+   background: var(--panel);
+   backdrop-filter: blur(18px);
+   -webkit-backdrop-filter: blur(18px);
+   border: 1px solid var(--panel-border);
+   border-radius: 14px;
+   padding: 12px 20px;
+   font-size: 12px;
+   color: var(--fg);
+   pointer-events: none;
+   opacity: 0;
+   transition: opacity 0.4s;
+   z-index: 20;
+   white-space: nowrap;
+   letter-spacing: 0.5px;
+ }
+ .hint.show { opacity: 1; }
+ @media (max-height: 580px) {
+   .top-bar { padding: 10px 14px; }
+   .title { font-size: 15px; }
+   .panel-inner { padding: 10px 14px; }
+ }
+</style>
+</head>
+<body>
+ <canvas id="scene"></canvas>
+
+ <div class="top-bar">
+   <div class="title-block">
+     <div class="title">云影 CLOUDSHADE</div>
+     <div class="subtitle">PROCEDURAL VOLUMETRIC SKY</div>
+   </div>
+   <div class="time-display">
+     <div class="clock" id="clock">12:00</div>
+     <div class="label" id="phaseLabel">正午</div>
+   </div>
+ </div>
+
+ <div class="fps" id="fps">60 FPS</div>
+ <div class="hint" id="hint">拖动屏幕旋转视角 · 拖动底部把手收起菜单</div>
+
+ <div class="control-panel" id="controlPanel">
+   <div class="handle" id="handle"></div>
+   <div class="panel-inner">
+     <div class="presets">
+       <button class="preset-btn" data-time="6"><span class="dot"></span>日出</button>
+       <button class="preset-btn active" data-time="12"><span class="dot"></span>正午</button>
+       <button class="preset-btn" data-time="18"><span class="dot"></span>日落</button>
+       <button class="preset-btn" data-time="22"><span class="dot"></span>夜晚</button>
+     </div>
+     <div class="sliders">
+       <div class="slider-row full">
+         <div class="slider-label">
+           <span class="name">时间</span>
+           <span class="value" id="timeValue">12:00</span>
+         </div>
+         <input type="range" id="timeSlider" min="0" max="24" step="0.05" value="12">
+       </div>
+       <div class="slider-row">
+         <div class="slider-label">
+           <span class="name">云量</span>
+           <span class="value" id="cloudValue">0.55</span>
+         </div>
+         <input type="range" id="cloudSlider" min="0" max="1" step="0.01" value="0.55">
+       </div>
+       <div class="slider-row">
+         <div class="slider-label">
+           <span class="name">风速</span>
+           <span class="value" id="windValue">0.30</span>
+         </div>
+         <input type="range" id="windSlider" min="0" max="1" step="0.01" value="0.30">
+       </div>
+       <div class="slider-row">
+         <div class="slider-label">
+           <span class="name">云团大小</span>
+           <span class="value" id="scaleValue">1.00x</span>
+         </div>
+         <input type="range" id="scaleSlider" min="0.5" max="2" step="0.05" value="1">
+       </div>
+       <div class="slider-row">
+         <div class="slider-label">
+           <span class="name">云细节</span>
+           <span class="value" id="detailValue">0.50</span>
+         </div>
+         <input type="range" id="detailSlider" min="0" max="1" step="0.01" value="0.5">
+       </div>
+       <div class="slider-row full">
+         <div class="slider-label">
+           <span class="name">曝光</span>
+           <span class="value" id="exposureValue">1.00</span>
+         </div>
+         <input type="range" id="exposureSlider" min="0.4" max="2" step="0.05" value="1">
+       </div>
+     </div>
+   </div>
+ </div>
+
+ <script type="importmap">
+ {
+   "imports": {
+     "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+   }
+ }
+ </script>
+
+ <script type="module">
+ import * as THREE from 'three';
+
+ // ============ 渲染器 ============
+ const canvas = document.getElementById('scene');
+ const renderer = new THREE.WebGLRenderer({
+   canvas,
+   antialias: false,
+   powerPreference: 'high-performance'
+ });
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+ renderer.setSize(window.innerWidth, window.innerHeight);
+ renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+ const scene = new THREE.Scene();
+ const camera = new THREE.PerspectiveCamera(62, window.innerWidth/window.innerHeight, 0.1, 2000);
+ camera.position.set(0, 1.6, 0);
+
+ // ============ 共享噪声 GLSL ============
+ // 关键改进：
+ //  1) domain warping：让基础 FBM 输出经过二次噪声扭曲采样，云会自然翻滚变形
+ //  2) dynamic coverage field：大尺度慢变噪声叠加到 coverage 上，让某些区域云聚集生长、某些区域消散
+ //  3) 多速度层：风向平移 + warping 演化 + coverage 演化 各自独立速率
+ const NOISE_GLSL = `
+   float hash21(vec2 p){
+     p = fract(p * vec2(123.34, 456.21));
+     p += dot(p, p + 45.32);
+     return fract(p.x * p.y);
+   }
+   float vnoise(vec2 p){
+     vec2 i = floor(p);
+     vec2 f = fract(p);
+     f = f*f*(3.0-2.0*f);
+     float a = hash21(i);
+     float b = hash21(i+vec2(1.0,0.0));
+     float c = hash21(i+vec2(0.0,1.0));
+     float d = hash21(i+vec2(1.0,1.0));
+     return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+   }
+   float fbm(vec2 p){
+     float v = 0.0;
+     float a = 0.5;
+     mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
+     for(int i=0;i<5;i++){
+       v += a * vnoise(p);
+       p = rot * p * 2.02 + vec2(1.7, 9.2);
+       a *= 0.5;
+     }
+     return v;
+   }
+   float sampleCloud(vec2 uv, float time, float coverage, float wind, float detail, float scale){
+     vec2 p = uv * 0.045 / scale;
+     // 风向平移
+     p += vec2(time * wind * 0.4, time * wind * 0.1);
+
+     // domain warping：让云翻滚变形（即使无风也缓慢演化）
+     vec2 q = vec2(
+       vnoise(p * 1.3 + vec2(0.0, time * 0.04)),
+       vnoise(p * 1.3 + vec2(5.2, 1.3) + vec2(time * 0.035, 0.0))
+     );
+
+     float base = fbm(p + q * 0.7);
+     float det = fbm(p * 3.0 + 11.3 + q * 0.4);
+
+     // 大尺度 coverage 场：云自然生成与消散
+     float covField = vnoise(p * 0.2 + vec2(time * 0.025, time * 0.018) + 17.3);
+     float effCov = coverage + (covField - 0.5) * 0.55;
+     effCov = clamp(effCov, 0.0, 1.0);
+
+     float d = base + det * detail * 0.35;
+     d = d - (1.0 - effCov) * 0.85;
+     d = smoothstep(0.0, 0.28, d);
+     return d;
+   }
+ `;
+
+ // ============ 天空 Shader ============
+ const skyUniforms = {
+   uTime: { value: 0 },
+   uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+   uSunHeight: { value: 1.0 },
+   uCloudCoverage: { value: 0.55 },
+   uWindSpeed: { value: 0.3 },
+   uCameraPos: { value: new THREE.Vector3() },
+   uDetail: { value: 0.5 },
+   uScale: { value: 1.0 },
+   uExposure: { value: 1.0 }
+ };
+
+ const skyMat = new THREE.ShaderMaterial({
+   uniforms: skyUniforms,
+   side: THREE.BackSide,
+   depthWrite: false,
+   vertexShader: `
+     varying vec3 vWorldDir;
+     void main(){
+       vWorldDir = normalize(position);
+       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+     }
+   `,
+   fragmentShader: `
+     precision highp float;
+     varying vec3 vWorldDir;
+     uniform float uTime;
+     uniform vec3 uSunDir;
+     uniform float uSunHeight;
+     uniform float uCloudCoverage;
+     uniform float uWindSpeed;
+     uniform vec3 uCameraPos;
+     uniform float uDetail;
+     uniform float uScale;
+     uniform float uExposure;
+     ${NOISE_GLSL}
+
+     vec3 getSkyColor(vec3 dir, float sh){
+       float t = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+       vec3 dayHorizon  = vec3(0.78, 0.88, 0.96);
+       vec3 dayZenith   = vec3(0.30, 0.55, 0.92);
+       vec3 nightHorizon= vec3(0.09, 0.11, 0.20);
+       vec3 nightZenith = vec3(0.02, 0.03, 0.07);
+       vec3 sunsetHoriz = vec3(1.0, 0.50, 0.22);
+       vec3 sunsetZen   = vec3(0.35, 0.22, 0.42);
+
+       float dayF = smoothstep(-0.15, 0.28, sh);
+       float sunsetF = clamp(1.0 - abs(sh) * 2.6, 0.0, 1.0);
+       sunsetF *= smoothstep(-0.22, 0.06, sh);
+
+       vec3 horizon = mix(nightHorizon, dayHorizon, dayF);
+       vec3 zenith  = mix(nightZenith,  dayZenith,  dayF);
+       horizon = mix(horizon, sunsetHoriz, sunsetF * 0.88);
+       zenith  = mix(zenith,  sunsetZen,  sunsetF * 0.42);
+
+       return mix(horizon, zenith, pow(t, 0.55));
+     }
+
+     vec3 getSun(vec3 dir, vec3 sunDir, float sh){
+       float sd = max(0.0, dot(dir, sunDir));
+       float disk = smoothstep(0.9995, 0.99978, sd);
+       float glow = pow(sd, 80.0)*0.55 + pow(sd, 8.0)*0.22 + pow(sd, 2.0)*0.06;
+
+       vec3 sunCol = vec3(1.0, 0.96, 0.88);
+       if(sh < 0.35) sunCol = mix(vec3(1.0, 0.42, 0.15), sunCol, smoothstep(0.0, 0.35, sh));
+       if(sh < 0.0)  sunCol = vec3(0.85, 0.9, 1.0);
+       return disk * sunCol * 2.2 + glow * sunCol * 0.7;
+     }
+
+     void main(){
+       vec3 dir = normalize(vWorldDir);
+       vec3 sky = getSkyColor(dir, uSunHeight);
+       sky += getSun(dir, uSunDir, uSunHeight);
+
+       // 夜晚星星
+       if(uSunHeight < 0.1){
+         float nightF = smoothstep(0.1, -0.25, uSunHeight);
+         float s = step(0.9986, hash21(dir.xy*900.0 + dir.z*120.0));
+         float tw = 0.55 + 0.45*sin(uTime*2.5 + hash21(dir.xy*40.0)*30.0);
+         sky += s * vec3(0.95, 0.98, 1.0) * nightF * tw * 0.9;
+       }
+
+       // 云层
+       if(dir.y > 0.02){
+         float cloudY = 80.0;
+         float t = (cloudY - uCameraPos.y) / dir.y;
+         vec2 cuv = dir.xz * t + uCameraPos.xz;
+         float density = sampleCloud(cuv, uTime, uCloudCoverage, uWindSpeed, uDetail, uScale);
+         float edge = smoothstep(0.0, 0.18, dir.y);
+         density *= edge;
+
+         vec3 sunDir = normalize(uSunDir);
+         float sunLight = clamp(sunDir.y * 1.6 + 0.25, 0.0, 1.0);
+
+         vec3 cLit, cShadow;
+         if(uSunHeight > 0.35){
+           cLit = vec3(1.0, 0.99, 0.97);
+           cShadow = vec3(0.48, 0.54, 0.66);
+         } else if(uSunHeight > 0.0){
+           float f = uSunHeight / 0.35;
+           cLit    = mix(vec3(1.0, 0.55, 0.30), vec3(1.0, 0.99, 0.97), f);
+           cShadow = mix(vec3(0.42, 0.28, 0.42), vec3(0.48, 0.54, 0.66), f);
+         } else {
+           cLit    = vec3(0.28, 0.32, 0.44);
+           cShadow = vec3(0.10, 0.13, 0.20);
+         }
+
+         vec3 dirXZ = normalize(vec3(dir.x, 0.0, dir.z) + 1e-5);
+         vec3 sunXZ = normalize(vec3(sunDir.x, 0.0, sunDir.z) + 1e-5);
+         float sunInfl = max(0.0, dot(dirXZ, sunXZ));
+         sunInfl = pow(sunInfl, 3.0);
+
+         float sunsetF = clamp(1.0 - abs(uSunHeight)*2.6, 0.0, 1.0) * step(-0.22, uSunHeight);
+         vec3 warmTint = vec3(1.0, 0.55, 0.30);
+         vec3 coolTint = vec3(0.65, 0.42, 0.62);
+         vec3 dirTint  = mix(coolTint, warmTint, sunInfl);
+
+         vec3 cloudCol = mix(cShadow, cLit, sunLight);
+         cloudCol = mix(cloudCol, dirTint, sunsetF * 0.45);
+         cloudCol = mix(cloudCol, cLit * 1.25, sunInfl * sunsetF * 0.55);
+
+         sky = mix(sky, cloudCol, density);
+       }
+
+       // 曝光 + Reinhard + gamma
+       sky *= uExposure;
+       sky = sky / (sky + vec3(1.0));
+       sky = pow(sky, vec3(1.0/2.2));
+       gl_FragColor = vec4(sky, 1.0);
+     }
+   `
+ });
+
+ const skyGeo = new THREE.SphereGeometry(800, 32, 16);
+ const sky = new THREE.Mesh(skyGeo, skyMat);
+ scene.add(sky);
+
+ // ============ 地面 Shader ============
+ const groundUniforms = {
+   uTime: { value: 0 },
+   uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+   uSunHeight: { value: 1.0 },
+   uCloudCoverage: { value: 0.55 },
+   uWindSpeed: { value: 0.3 },
+   uCameraPos: { value: new THREE.Vector3() },
+   uDetail: { value: 0.5 },
+   uScale: { value: 1.0 }
+ };
+
+ const groundMat = new THREE.ShaderMaterial({
+   uniforms: groundUniforms,
+   vertexShader: `
+     varying vec3 vWorldPos;
+     void main(){
+       vec4 wp = modelMatrix * vec4(position, 1.0);
+       vWorldPos = wp.xyz;
+       gl_Position = projectionMatrix * viewMatrix * wp;
+     }
+   `,
+   fragmentShader: `
+     precision highp float;
+     varying vec3 vWorldPos;
+     uniform float uTime;
+     uniform vec3 uSunDir;
+     uniform float uSunHeight;
+     uniform float uCloudCoverage;
+     uniform float uWindSpeed;
+     uniform vec3 uCameraPos;
+     uniform float uDetail;
+     uniform float uScale;
+     ${NOISE_GLSL}
+
+     void main(){
+       vec3 pos = vWorldPos;
+       vec3 gColor;
+       if(uSunHeight > 0.3){
+         gColor = vec3(0.93, 0.94, 0.96);
+       } else if(uSunHeight > 0.0){
+         float f = uSunHeight / 0.3;
+         gColor = mix(vec3(0.96, 0.72, 0.55), vec3(0.93, 0.94, 0.96), f);
+       } else {
+         float f = clamp(-uSunHeight / 0.3, 0.0, 1.0);
+         gColor = mix(vec3(0.93, 0.94, 0.96), vec3(0.18, 0.20, 0.28), f);
+       }
+
+       // 网格
+       vec2 grid = abs(fract(pos.xz * 0.5) - 0.5);
+       float gline = min(grid.x, grid.y);
+       float gfac = 1.0 - smoothstep(0.0, 0.025, gline);
+       float dist = length(pos.xz - uCameraPos.xz);
+       float gfade = 1.0 - smoothstep(15.0, 55.0, dist);
+       gColor = mix(gColor, gColor * 0.78, gfac * gfade * 0.55);
+
+       // 云阴影
+       vec3 sunDir = normalize(uSunDir);
+       float cloudY = 80.0;
+       float t = (cloudY - pos.y) / max(sunDir.y, 0.04);
+       vec2 cuv = pos.xz + sunDir.xz * t;
+       float shadow = sampleCloud(cuv, uTime, uCloudCoverage, uWindSpeed, uDetail, uScale);
+       float shStrength = smoothstep(0.0, 0.45, uSunHeight);
+       shadow *= shStrength * 0.62;
+       gColor = mix(gColor, gColor * 0.38, shadow);
+
+       // 距离雾
+       vec3 fogCol;
+       if(uSunHeight > 0.3){
+         fogCol = vec3(0.78, 0.88, 0.96);
+       } else if(uSunHeight > 0.0){
+         float f = uSunHeight / 0.3;
+         fogCol = mix(vec3(0.96, 0.58, 0.38), vec3(0.78, 0.88, 0.96), f);
+       } else {
+         float f = clamp(-uSunHeight / 0.3, 0.0, 1.0);
+         fogCol = mix(vec3(0.78, 0.88, 0.96), vec3(0.07, 0.09, 0.16), f);
+       }
+       float fogF = smoothstep(35.0, 180.0, dist);
+       gColor = mix(gColor, fogCol, fogF);
+
+       gColor = pow(gColor, vec3(1.0/2.2));
+       gl_FragColor = vec4(gColor, 1.0);
+     }
+   `
+ });
+
+ const groundGeo = new THREE.PlaneGeometry(2000, 2000, 1, 1);
+ groundGeo.rotateX(-Math.PI / 2);
+ const ground = new THREE.Mesh(groundGeo, groundMat);
+ scene.add(ground);
+
+ // ============ 视角控制（已修正方向） ============
+ let camYaw = 0;
+ let camPitch = -0.04;
+ const camHeight = 1.6;
+
+ function updateCamera(){
+   const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
+   const dir = new THREE.Vector3(
+     Math.sin(camYaw) * cp,
+     sp,
+     -Math.cos(camYaw) * cp
+   );
+   camera.position.set(0, camHeight, 0);
+   camera.lookAt(
+     camera.position.x + dir.x,
+     camera.position.y + dir.y,
+     camera.position.z + dir.z
+   );
+   skyUniforms.uCameraPos.value.copy(camera.position);
+   groundUniforms.uCameraPos.value.copy(camera.position);
+ }
+ updateCamera();
+
+ let dragging = false, lastX = 0, lastY = 0;
+ function ptr(e){ return e.touches ? e.touches[0] : e; }
+ function onDown(e){
+   // 点击把手不触发拖动
+   if(e.target.classList.contains('handle') || e.target.closest('.handle')) return;
+   if(e.target.closest('.control-panel')) return;
+   dragging = true;
+   const p = ptr(e);
+   lastX = p.clientX; lastY = p.clientY;
+   hideHint();
+ }
+ function onMove(e){
+   if(!dragging) return;
+   const p = ptr(e);
+   const dx = p.clientX - lastX, dy = p.clientY - lastY;
+   lastX = p.clientX; lastY = p.clientY;
+   // 修正：往哪拖往哪看（A 模式）
+   camYaw   += dx * 0.005;
+   camPitch -= dy * 0.005;
+   camPitch = Math.max(-0.32, Math.min(0.55, camPitch));
+   updateCamera();
+ }
+ function onUp(){ dragging = false; }
+ canvas.addEventListener('touchstart', onDown, { passive: true });
+ canvas.addEventListener('touchmove', onMove, { passive: true });
+ canvas.addEventListener('touchend', onUp);
+ canvas.addEventListener('mousedown', onDown);
+ window.addEventListener('mousemove', onMove);
+ window.addEventListener('mouseup', onUp);
+
+ // ============ 太阳时段 ============
+ function setTime(hour){
+   const angle = (hour - 6) / 12 * Math.PI;
+   const sunDir = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).normalize();
+   skyUniforms.uSunDir.value.copy(sunDir);
+   skyUniforms.uSunHeight.value = sunDir.y;
+   groundUniforms.uSunDir.value.copy(sunDir);
+   groundUniforms.uSunHeight.value = sunDir.y;
+
+   const h = Math.floor(hour);
+   const m = Math.floor((hour - h) * 60);
+   const str = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+   document.getElementById('clock').textContent = str;
+   document.getElementById('timeValue').textContent = str;
+
+   let phase = '';
+   if(hour < 5) phase = '深夜';
+   else if(hour < 7) phase = '黎明';
+   else if(hour < 10) phase = '清晨';
+   else if(hour < 14) phase = '正午';
+   else if(hour < 17) phase = '午后';
+   else if(hour < 19) phase = '黄昏';
+   else if(hour < 22) phase = '夜晚';
+   else phase = '深夜';
+   document.getElementById('phaseLabel').textContent = phase;
+
+   document.querySelectorAll('.preset-btn').forEach(btn => {
+     const t = parseFloat(btn.dataset.time);
+     btn.classList.toggle('active', Math.abs(t - hour) < 0.5);
+   });
+ }
+
+ // ============ UI 绑定 ============
+ const timeSlider     = document.getElementById('timeSlider');
+ const cloudSlider    = document.getElementById('cloudSlider');
+ const windSlider     = document.getElementById('windSlider');
+ const scaleSlider    = document.getElementById('scaleSlider');
+ const detailSlider   = document.getElementById('detailSlider');
+ const exposureSlider = document.getElementById('exposureSlider');
+
+ let currentHour = 12, targetHour = 12;
+
+ timeSlider.addEventListener('input', e => {
+   targetHour = parseFloat(e.target.value);
+ });
+
+ function bindSlider(slider, skyUniform, groundUniform, valueEl, fmt){
+   slider.addEventListener('input', e => {
+     const v = parseFloat(e.target.value);
+     if(skyUniform) skyUniform.value = v;
+     if(groundUniform) groundUniform.value = v;
+     valueEl.textContent = fmt(v);
+   });
+ }
+ bindSlider(cloudSlider,    skyUniforms.uCloudCoverage, groundUniforms.uCloudCoverage, document.getElementById('cloudValue'),    v => v.toFixed(2));
+ bindSlider(windSlider,     skyUniforms.uWindSpeed,     groundUniforms.uWindSpeed,     document.getElementById('windValue'),     v => v.toFixed(2));
+ bindSlider(scaleSlider,    skyUniforms.uScale,         groundUniforms.uScale,         document.getElementById('scaleValue'),    v => v.toFixed(2)+'x');
+ bindSlider(detailSlider,   skyUniforms.uDetail,        groundUniforms.uDetail,        document.getElementById('detailValue'),   v => v.toFixed(2));
+ bindSlider(exposureSlider, skyUniforms.uExposure,      null,                          document.getElementById('exposureValue'), v => v.toFixed(2));
+
+ document.querySelectorAll('.preset-btn').forEach(btn => {
+   btn.addEventListener('click', () => {
+     targetHour = parseFloat(btn.dataset.time);
+     timeSlider.value = targetHour;
+   });
+ });
+
+ // 菜单收起
+ const controlPanel = document.getElementById('controlPanel');
+ const handle = document.getElementById('handle');
+ let collapsed = false;
+ handle.addEventListener('click', () => {
+   collapsed = !collapsed;
+   controlPanel.classList.toggle('collapsed', collapsed);
+ });
+
+ // 提示
+ const hint = document.getElementById('hint');
+ function showHint(){ hint.classList.add('show'); setTimeout(hideHint, 3200); }
+ function hideHint(){ hint.classList.remove('show'); }
+ setTimeout(showHint, 700);
+
+ // ============ 自适应 ============
+ function onResize(){
+   const w = window.innerWidth, h = window.innerHeight;
+   renderer.setSize(w, h);
+   camera.aspect = w / h;
+   camera.updateProjectionMatrix();
+ }
+ window.addEventListener('resize', onResize);
+ window.addEventListener('orientationchange', () => setTimeout(onResize, 100));
+
+ // ============ 主循环 ============
+ const fpsEl = document.getElementById('fps');
+ let lastTime = performance.now();
+ let frameCount = 0, lastFps = lastTime;
+
+ function animate(){
+   requestAnimationFrame(animate);
+   const now = performance.now();
+   const dt = Math.min(0.05, (now - lastTime) / 1000);
+   lastTime = now;
+
+   // 时间平滑过渡
+   if(Math.abs(currentHour - targetHour) > 0.001){
+     let diff = targetHour - currentHour;
+     if(diff > 12) diff -= 24;
+     if(diff < -12) diff += 24;
+     currentHour += diff * Math.min(1, dt * 3.2);
+     if(currentHour < 0) currentHour += 24;
+     if(currentHour >= 24) currentHour -= 24;
+     setTime(currentHour);
+   }
+
+   skyUniforms.uTime.value = now * 0.001;
+   groundUniforms.uTime.value = now * 0.001;
+
+   renderer.render(scene, camera);
+
+   frameCount++;
+   if(now - lastFps >= 500){
+     const fps = Math.round(frameCount * 1000 / (now - lastFps));
+     fpsEl.textContent = fps + ' FPS';
+     frameCount = 0;
+     lastFps = now;
+   }
+ }
+
+ setTime(12);
+ animate();
+ </script>
+</body>
+</html>
