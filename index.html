@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ 极速点击 - 多人游戏大厅</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ 极速点击</h1>
+            <p class="subtitle">多人在线反应速度对战</p>
+        </header>
+
+        <div class="grid-2">
+            <div class="card">
+                <h2>🎮 创建房间</h2>
+                <div class="form-group">
+                    <input type="text" id="playerName" placeholder="输入你的昵称" maxlength="12">
+                    <input type="text" id="roomName" placeholder="房间名称（可选）" maxlength="20">
+                    <button id="createBtn" class="btn btn-primary">创建房间</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🔗 加入房间</h2>
+                <div class="form-group">
+                    <input type="text" id="joinName" placeholder="输入你的昵称" maxlength="12">
+                    <input type="text" id="roomCode" placeholder="输入6位房间号" maxlength="6">
+                    <button id="joinBtn" class="btn btn-secondary">加入房间</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card room-list-card">
+            <div class="room-list-header">
+                <h2>🏠 房间列表</h2>
+                <button id="refreshBtn" class="btn btn-ghost">🔄 刷新</button>
+            </div>
+            <div id="roomsContainer">
+                <p class="empty">加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/supabase.js"></script>
+    <script src="js/lobby.js"></script>
+</body>
+</html>
