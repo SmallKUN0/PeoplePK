@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏房间 - 极速点击</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+    <div class="game-container">
+        <div class="room-header">
+            <div>
+                <h1>房间 <span id="displayRoomCode" class="room-code-badge"></span></h1>
+                <p id="roomStatus" class="status-badge waiting">等待中</p>
+            </div>
+            <button id="leaveBtn" class="btn btn-danger">离开房间</button>
+        </div>
+
+        <div class="game-layout">
+            <aside class="players-panel">
+                <h3>👥 玩家列表</h3>
+                <div id="playersList"></div>
+            </aside>
+
+            <main class="game-area">
+                <!-- 等待界面 -->
+                <div id="waitingScreen" class="screen">
+                    <div class="screen-content">
+                        <div class="pulse-icon">⏳</div>
+                        <p>等待房主开始游戏...</p>
+                        <p class="hint">所有人准备好后，房主点击开始</p>
+                        <button id="startBtn" class="btn btn-primary hidden">🚀 开始游戏</button>
+                    </div>
+                </div>
+
+                <!-- 游戏界面 -->
+                <div id="gameScreen" class="screen hidden">
+                    <div class="game-hud">
+                        <div class="timer-box">
+                            <span class="timer-label">剩余时间</span>
+                            <span id="timer" class="timer-value">10</span>
+                        </div>
+                        <div class="score-box">
+                            <span class="score-label">我的得分</span>
+                            <span id="myScore" class="score-value">0</span>
+                        </div>
+                    </div>
+                    <button id="clickBtn" class="click-button">👆 疯狂点击!</button>
+                </div>
+
+                <!-- 结果界面 -->
+                <div id="resultScreen" class="screen hidden">
+                    <div class="screen-content">
+                        <h2>🏆 游戏结束</h2>
+                        <div id="ranking"></div>
+                        <div class="result-actions">
+                            <button id="restartBtn" class="btn btn-primary hidden">🔄 再来一局</button>
+                            <button id="backBtn" class="btn btn-secondary">🏠 返回大厅</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="js/supabase.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
