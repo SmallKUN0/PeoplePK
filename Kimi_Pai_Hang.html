@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+   <title>作品阅览器</title>
+   <style>
+       * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+       body {
+           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+           background: #0a0a1a;
+           color: #e0e0ff;
+           overflow: hidden;
+           height: 100vh;
+           width: 100vw;
+       }
+
+       /* ========== 滚动公告 ========== */
+       .notice-bar {
+           position: fixed;
+           top: 0; left: 0; right: 0;
+           height: 38px;
+           background: linear-gradient(90deg, #dc2626, #ea580c, #dc2626);
+           background-size: 200% 100%;
+           animation: gradientMove 3s ease infinite;
+           display: flex;
+           align-items: center;
+           overflow: hidden;
+           z-index: 200;
+           box-shadow: 0 2px 10px rgba(220,38,38,0.3);
+       }
+       .notice-track {
+           display: flex;
+           white-space: nowrap;
+           animation: scrollText 20s linear infinite;
+       }
+       .notice-text {
+           font-size: 14px;
+           font-weight: 500;
+           color: #fff;
+           padding-right: 80px;
+           letter-spacing: 1px;
+           text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+       }
+       @keyframes scrollText {
+           0% { transform: translateX(0); }
+           100% { transform: translateX(-50%); }
+       }
+       @keyframes gradientMove {
+           0%, 100% { background-position: 0% 50%; }
+           50% { background-position: 100% 50%; }
+       }
+
+       /* ========== 主布局 ========== */
+       #mainView {
+           display: flex;
+           flex-direction: column;
+           height: 100vh;
+           padding-top: 38px;
+       }
+       .main-layout {
+           display: flex;
+           flex: 1;
+           overflow: hidden;
+       }
+
+       /* 左侧名次列表 */
+       .rank-sidebar {
+           width: 100px;
+           min-width: 100px;
+           background: rgba(0,0,0,0.3);
+           border-right: 1px solid rgba(255,255,255,0.06);
+           display: flex;
+           flex-direction: column;
+           overflow: hidden;
+       }
+       .sidebar-header {
+           padding: 14px 10px;
+           text-align: center;
+           font-size: 13px;
+           font-weight: 600;
+           color: #a78bfa;
+           border-bottom: 1px solid rgba(255,255,255,0.06);
+           background: rgba(255,255,255,0.02);
+       }
+       .rank-list {
+           flex: 1;
+           overflow-y: auto;
+           padding: 8px;
+       }
+       .rank-list::-webkit-scrollbar { width: 3px; }
+       .rank-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+       .rank-item {
+           display: flex;
+           align-items: center;
+           justify-content: center;
+           height: 48px;
+           margin-bottom: 8px;
+           border-radius: 12px;
+           font-size: 18px;
+           font-weight: 700;
+           cursor: pointer;
+           transition: all 0.25s ease;
+           border: 1px solid transparent;
+           position: relative;
+       }
+       .rank-item.exists {
+           background: rgba(255,255,255,0.04);
+           color: #cbd5e1;
+       }
+       .rank-item.exists:hover {
+           background: rgba(96,165,250,0.12);
+           border-color: rgba(96,165,250,0.3);
+           transform: scale(1.05);
+       }
+       .rank-item.active {
+           background: linear-gradient(135deg, rgba(96,165,250,0.25), rgba(52,211,153,0.15));
+           border-color: rgba(96,165,250,0.5);
+           color: #fff;
+           box-shadow: 0 0 15px rgba(96,165,250,0.15);
+       }
+       .rank-item.missing {
+           background: rgba(255,255,255,0.02);
+           color: rgba(255,255,255,0.15);
+           cursor: not-allowed;
+       }
+       .rank-item .dot {
+           position: absolute;
+           top: 8px; right: 8px;
+           width: 6px; height: 6px;
+           border-radius: 50%;
+           background: #34d399;
+           box-shadow: 0 0 6px #34d399;
+       }
+
+       /* 中间预览区 */
+       .preview-area {
+           flex: 1;
+           position: relative;
+           background: #050510;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+       }
+       #previewIframe {
+           width: 100%;
+           height: 100%;
+           border: none;
+           background: #fff;
+           display: none;
+       }
+       #previewIframe.show { display: block; }
+       .preview-placeholder {
+           text-align: center;
+           color: #475569;
+           padding: 40px;
+       }
+       .preview-placeholder .ph-icon {
+           font-size: 4rem;
+           margin-bottom: 16px;
+           opacity: 0.3;
+       }
+       .preview-placeholder .ph-title {
+           font-size: 1.1rem;
+           margin-bottom: 8px;
+           color: #64748b;
+       }
+       .preview-placeholder .ph-sub {
+           font-size: 0.85rem;
+           color: #475569;
+       }
+
+       /* 右下角查看详情按钮 */
+       .view-detail-btn {
+           position: fixed;
+           bottom: 24px;
+           right: 24px;
+           z-index: 150;
+           padding: 14px 32px;
+           border-radius: 14px;
+           border: none;
+           background: linear-gradient(135deg, #8b5cf6, #6366f1);
+           color: white;
+           font-size: 15px;
+           font-weight: 600;
+           cursor: pointer;
+           box-shadow: 0 6px 24px rgba(99,102,241,0.35);
+           transition: all 0.3s ease;
+           letter-spacing: 1px;
+       }
+       .view-detail-btn:hover {
+           transform: translateY(-2px);
+           box-shadow: 0 10px 32px rgba(99,102,241,0.45);
+       }
+       .view-detail-btn:active {
+           transform: translateY(0) scale(0.97);
+       }
+       .view-detail-btn:disabled {
+           background: linear-gradient(135deg, #334155, #1e293b);
+           color: #64748b;
+           cursor: not-allowed;
+           box-shadow: none;
+           transform: none;
+       }
+
+       /* ========== 全屏阅览视图 ========== */
+       #viewerView {
+           display: none;
+           position: fixed;
+           top: 0; left: 0; right: 0; bottom: 0;
+           background: #000;
+           z-index: 100;
+       }
+       #viewerIframe {
+           width: 100%;
+           height: 100%;
+           border: none;
+           background: #fff;
+       }
+
+       /* ========== 悬浮球 ========== */
+       #floatBall {
+           display: none;
+           position: fixed;
+           width: 64px;
+           height: 64px;
+           border-radius: 50%;
+           background: linear-gradient(135deg, #ef4444, #dc2626);
+           color: white;
+           font-size: 13px;
+           font-weight: 600;
+           align-items: center;
+           justify-content: center;
+           cursor: pointer;
+           z-index: 10000;
+           box-shadow: 0 4px 20px rgba(220,38,38,0.4), 0 0 0 4px rgba(220,38,38,0.1);
+           letter-spacing: 1px;
+           touch-action: none;
+           transition: transform 0.2s, box-shadow 0.2s;
+       }
+       #floatBall:active {
+           transform: scale(0.92);
+           box-shadow: 0 2px 10px rgba(220,38,38,0.3);
+       }
+
+       /* ========== 弹窗 ========== */
+       #modalOverlay {
+           display: none;
+           position: fixed;
+           top: 0; left: 0; right: 0; bottom: 0;
+           background: rgba(0,0,0,0.7);
+           backdrop-filter: blur(8px);
+           z-index: 10001;
+           align-items: center;
+           justify-content: center;
+           animation: fadeIn 0.2s;
+       }
+       .modal-box {
+           background: linear-gradient(135deg, #1e1e3f, #2d2d5a);
+           border: 1px solid rgba(255,255,255,0.1);
+           border-radius: 20px;
+           padding: 32px;
+           width: 90%;
+           max-width: 360px;
+           text-align: center;
+           box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+           animation: scaleIn 0.2s;
+       }
+       .modal-box h3 {
+           font-size: 1.3rem;
+           margin-bottom: 12px;
+           color: #fff;
+       }
+       .modal-box p {
+           color: #8892b0;
+           margin-bottom: 24px;
+           font-size: 0.95rem;
+       }
+       .modal-btns {
+           display: flex;
+           gap: 12px;
+           justify-content: center;
+       }
+       .modal-btns button {
+           padding: 10px 24px;
+           border-radius: 10px;
+           border: none;
+           font-size: 0.95rem;
+           cursor: pointer;
+           transition: all 0.2s;
+           font-weight: 500;
+       }
+       .btn-cancel {
+           background: rgba(255,255,255,0.08);
+           color: #8892b0;
+       }
+       .btn-cancel:hover { background: rgba(255,255,255,0.15); }
+       .btn-confirm {
+           background: linear-gradient(135deg, #ef4444, #dc2626);
+           color: white;
+       }
+       .btn-confirm:hover {
+           transform: translateY(-1px);
+           box-shadow: 0 4px 12px rgba(220,38,38,0.3);
+       }
+
+       /* 移动端适配 */
+       @media (max-width: 640px) {
+           .rank-sidebar { width: 80px; min-width: 80px; }
+           .sidebar-header { font-size: 12px; padding: 12px 6px; }
+           .rank-item { height: 44px; font-size: 16px; }
+           .view-detail-btn {
+               bottom: 16px; right: 16px;
+               padding: 12px 24px;
+               font-size: 14px;
+           }
+       }
+
+       @keyframes fadeIn {
+           from { opacity: 0; }
+           to { opacity: 1; }
+       }
+       @keyframes scaleIn {
+           from { opacity: 0; transform: scale(0.9); }
+           to { opacity: 1; transform: scale(1); }
+       }
+   </style>
+</head>
+<body>
+
+   <!-- 滚动公告 -->
+   <div class="notice-bar">
+       <div class="notice-track" id="noticeTrack"></div>
+   </div>
+
+   <!-- 主视图 -->
+   <div id="mainView">
+       <div class="main-layout">
+           <!-- 左上角名次列表 -->
+           <div class="rank-sidebar">
+               <div class="sidebar-header">名次</div>
+               <div class="rank-list" id="rankList"></div>
+           </div>
+
+           <!-- 中间预览区 -->
+           <div class="preview-area">
+               <iframe id="previewIframe" src="about:blank"></iframe>
+               <div class="preview-placeholder" id="previewPlaceholder">
+                   <div class="ph-icon">📂</div>
+                   <div class="ph-title">请从左侧选择一个名次</div>
+                   <div class="ph-sub">点击名次即可在此预览作品画面</div>
+               </div>
+           </div>
+       </div>
+   </div>
+
+   <!-- 右下角查看详情 -->
+   <button id="viewDetailBtn" class="view-detail-btn" disabled>查看详情</button>
+
+   <!-- 全屏阅览视图 -->
+   <div id="viewerView">
+       <iframe id="viewerIframe"></iframe>
+   </div>
+
+   <!-- 悬浮球 -->
+   <div id="floatBall">退出</div>
+
+   <!-- 退出确认弹窗 -->
+   <div id="modalOverlay">
+       <div class="modal-box">
+           <h3>确认退出</h3>
+           <p>是否返回到作品列表？</p>
+           <div class="modal-btns">
+               <button class="btn-cancel" onclick="hideModal()">取消</button>
+               <button class="btn-confirm" onclick="confirmExit()">确认退出</button>
+           </div>
+       </div>
+   </div>
+
+   <script>
+       let selectedRank = null;
+       let fileStatus = [];
+
+       // 初始化公告
+       function initNotice() {
+           const text = '当前为测试版，目前在持续优化中，如果想加新的作品可以到评论区申请你的好的作品';
+           const track = document.getElementById('noticeTrack');
+           // 复制多份确保无缝滚动
+           for (let i = 0; i < 6; i++) {
+               const span = document.createElement('span');
+               span.className = 'notice-text';
+               span.textContent = '🔔 ' + text + '　　';
+               track.appendChild(span);
+           }
+       }
+
+       // 检测文件
+       async function detectFiles() {
+           const promises = [];
+           for (let i = 1; i <= 30; i++) {
+               promises.push(
+                   fetch(`./${i}.html`, { method: 'HEAD', cache: 'no-store' })
+                       .then(res => ({ rank: i, exists: res.ok }))
+                       .catch(() => ({ rank: i, exists: false }))
+               );
+           }
+           fileStatus = await Promise.all(promises);
+           renderRankList();
+       }
+
+       // 渲染名次列表
+       function renderRankList() {
+           const container = document.getElementById('rankList');
+           container.innerHTML = '';
+
+           fileStatus.forEach(({ rank, exists }) => {
+               const item = document.createElement('div');
+               item.className = 'rank-item' + (exists ? ' exists' : ' missing');
+               item.textContent = rank;
+               if (exists) {
+                   item.innerHTML = rank + '<span class="dot"></span>';
+                   item.addEventListener('click', () => selectRank(rank, item));
+               }
+               container.appendChild(item);
+           });
+       }
+
+       // 选择名次
+       function selectRank(rank, el) {
+           selectedRank = rank;
+           
+           // 更新激活状态
+           document.querySelectorAll('.rank-item').forEach(i => i.classList.remove('active'));
+           el.classList.add('active');
+
+           // 加载预览
+           const iframe = document.getElementById('previewIframe');
+           const placeholder = document.getElementById('previewPlaceholder');
+           iframe.src = `./${rank}.html`;
+           iframe.classList.add('show');
+           placeholder.style.display = 'none';
+
+           // 启用查看详情按钮
+           const btn = document.getElementById('viewDetailBtn');
+           btn.disabled = false;
+           btn.textContent = `查看第 ${rank} 名详情`;
+       }
+
+       // 进入全屏阅览
+       function enterFullView() {
+           if (!selectedRank) return;
+           document.getElementById('mainView').style.display = 'none';
+           document.getElementById('viewDetailBtn').style.display = 'none';
+           document.getElementById('viewerView').style.display = 'block';
+           document.getElementById('viewerIframe').src = `./${selectedRank}.html`;
+
+           const ball = document.getElementById('floatBall');
+           ball.style.display = 'flex';
+
+           // 初始居中
+           const x = (window.innerWidth - 64) / 2;
+           const y = (window.innerHeight - 64) / 2;
+           ball.style.left = x + 'px';
+           ball.style.top = y + 'px';
+       }
+
+       // 退出确认
+       function confirmExit() {
+           document.getElementById('viewerIframe').src = '';
+           document.getElementById('viewerView').style.display = 'none';
+           document.getElementById('mainView').style.display = 'flex';
+           document.getElementById('viewDetailBtn').style.display = 'block';
+           document.getElementById('floatBall').style.display = 'none';
+           hideModal();
+       }
+
+       // 弹窗控制
+       function showModal() {
+           document.getElementById('modalOverlay').style.display = 'flex';
+       }
+       function hideModal() {
+           document.getElementById('modalOverlay').style.display = 'none';
+       }
+       document.getElementById('modalOverlay').addEventListener('click', (e) => {
+           if (e.target === document.getElementById('modalOverlay')) hideModal();
+       });
+
+       // 查看详情按钮绑定
+       document.getElementById('viewDetailBtn').addEventListener('click', enterFullView);
+
+       // 悬浮球拖拽与点击逻辑
+       (function initFloatBall() {
+           const ball = document.getElementById('floatBall');
+           let state = {
+               dragging: false,
+               startTime: 0,
+               startX: 0,
+               startY: 0,
+               offsetX: 0,
+               offsetY: 0,
+               hasMoved: false
+           };
+
+           function onStart(e) {
+               e.preventDefault();
+               const touch = e.touches ? e.touches[0] : e;
+               const rect = ball.getBoundingClientRect();
+
+               state.dragging = true;
+               state.startTime = Date.now();
+               state.startX = touch.clientX;
+               state.startY = touch.clientY;
+               state.offsetX = touch.clientX - rect.left;
+               state.offsetY = touch.clientY - rect.top;
+               state.hasMoved = false;
+
+               ball.style.transition = 'none';
+           }
+
+           function onMove(e) {
+               if (!state.dragging) return;
+               e.preventDefault();
+               const touch = e.touches ? e.touches[0] : e;
+
+               if (Math.abs(touch.clientX - state.startX) > 5 || Math.abs(touch.clientY - state.startY) > 5) {
+                   state.hasMoved = true;
+               }
+
+               let x = touch.clientX - state.offsetX;
+               let y = touch.clientY - state.offsetY;
+
+               const maxX = window.innerWidth - ball.offsetWidth;
+               const maxY = window.innerHeight - ball.offsetHeight;
+               x = Math.max(0, Math.min(x, maxX));
+               y = Math.max(0, Math.min(y, maxY));
+
+               ball.style.left = x + 'px';
+               ball.style.top = y + 'px';
+           }
+
+           function onEnd() {
+               if (!state.dragging) return;
+               state.dragging = false;
+               ball.style.transition = 'transform 0.2s, box-shadow 0.2s';
+
+               const duration = Date.now() - state.startTime;
+               if (!state.hasMoved && duration < 400) {
+                   showModal();
+               }
+           }
+
+           ball.addEventListener('mousedown', onStart);
+           document.addEventListener('mousemove', onMove);
+           document.addEventListener('mouseup', onEnd);
+
+           ball.addEventListener('touchstart', onStart, { passive: false });
+           document.addEventListener('touchmove', onMove, { passive: false });
+           document.addEventListener('touchend', onEnd);
+       })();
+
+       // 初始化
+       initNotice();
+       detectFiles();
+   </script>
+</body>
+</html>
